@@ -2,7 +2,7 @@
 require('dotenv').config(); // Cargar variables de entorno
 const express = require('express');
 const fs = require('fs');
-// const fetch = require('node-fetch'); // <-- Eliminado. Usamos fetch nativo de Node.js 22+.
+// const fetch = require('node-fetch'); // Esta línea ha sido eliminada. Usamos fetch nativo de Node.js.
 
 // 3. Crear la app de Express
 const app = express();
@@ -59,7 +59,6 @@ app.get('/callback', async (req, res) => {
     }
   } catch (error) {
     console.error('❌ Error en la solicitud de token:', error);
-    // Si el error es fetch is not a function, asegúrate de haber actualizado el código
     res.status(500).send('Error interno del servidor.'); 
   }
 });
