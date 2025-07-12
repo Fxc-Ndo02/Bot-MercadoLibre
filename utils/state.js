@@ -1,6 +1,8 @@
-// Almacén simple en memoria para el estado de la conversación (chatId -> { mode: 'answering', questionId: '...' })
+// utils/state.js
+
+// Almacena el contexto del usuario (chatId: { mode: 'answering', questionId: '...' })
 const userContexts = {};
 
 module.exports = {
-    userContexts,
+    userContexts
 };
