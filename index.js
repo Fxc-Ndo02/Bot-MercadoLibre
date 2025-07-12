@@ -19,6 +19,7 @@ function escapeMarkdown(text) {
         return '';
     }
     // Escapa solo los caracteres que Telegram necesita para evitar errores de formato.
+    // Aunque el escapeMarkdown incluye '|', las strings estáticas deben ser escapadas manualmente si se usa MarkdownV2.
     return text.toString().replace(/[_*[\]()~`>#+-=|{}.!]/g, '\\$&');
 }
 
@@ -104,8 +105,9 @@ app.get('/callback', async (req, res) => {
         fs.writeFileSync('tokens.json', JSON.stringify(data, null, 2));
         
         // Notificar al chat principal si está configurado
+        // Modificado: Escapando los '|' del emoji
         if (process.env.TELEGRAM_CHAT_ID) {
-            await sendTelegramMessage(process.env.TELEGRAM_CHAT_ID, '|✅| ¡CosmeticaSPA-BOT vinculado correctamente a Mercado Libre!');
+            await sendTelegramMessage(process.env.TELEGRAM_CHAT_ID, '\\|✅\\| ¡CosmeticaSPA\\-BOT vinculado correctamente a Mercado Libre\\!');
         }
         
         res.send('<h3>¡Cuenta vinculada con éxito!</h3><p>Ya podés cerrar esta ventana y usar el bot en Telegram.</p>');
@@ -136,17 +138,19 @@ app.post('/telegram-webhook', async (req, res) => {
 
     // --- Comandos públicos ---
     if (text === '/start' || text === '/menu' || text === '/help') {
-        const menu = `*|👋|\\ Estos son los comandos disponibles:*\n\n` +
-                     `*|/productinfo|* \\- Muestra informacion de tus productos\\.\n` +
-                     `*|/checksales|* \\- Revisa las últimas ventas concretadas\\.\n` +
-                     `*|/checkquestions|* \\- Muestra preguntas las preguntass pendientes\\.\n` +
-                     `*|/status|* \\- Verifica el estado de CosmeticaSPA-BOT\\.`;
+        // Modificado: Escapando los '|' en el string de menu para MarkdownV2
+        const menu = `*\\|👋\\|*\\ Estos son los comandos disponibles:\\\n\\\n` +
+                     `*\\|/productinfo\\|* \\- Muestra informacion de tus productos\\.\\\n` +
+                     `*\\|/checksales\\|* \\- Revisa las últimas ventas concretadas\\.\\\n` +
+                     `*\\|/checkquestions\\|* \\- Muestra preguntas las preguntass pendientes\\.\\\n` +
+                     `*\\|/status\\|* \\- Verifica el estado de CosmeticaSPA\\-BOT\\.`;
         await sendTelegramMessage(chatId, menu);
         return res.sendStatus(200);
     }
     
     if (text === '/status') {
-        await sendTelegramMessage(chatId, '|✅| CosmeticaSPA-BOT está activo y funcionando correctamente\\.');
+        // Modificado: Escapando los '|' del emoji
+        await sendTelegramMessage(chatId, '\\|✅\\| CosmeticaSPA\\-BOT está activo y funcionando correctamente\\.');
         return res.sendStatus(200);
     }
 
@@ -154,8 +158,8 @@ app.post('/telegram-webhook', async (req, res) => {
     try {
         const tokens = await ensureAccessToken();
         if (!tokens) {
-            // Modificado: Se añadió el formato |⚠️|
-            await sendTelegramMessage(chatId, '|⚠️| *Error de autenticación*\\.\nNecesitás vincular tu cuenta de Mercado Libre primero\\. Visitá la página principal de tu bot para hacerlo\\.');
+            // Modificado: Escapando los '|' del emoji
+            await sendTelegramMessage(chatId, '\\|⚠️\\| *Error de autenticación*\\.\\\nNecesitás vincular tu cuenta de Mercado Libre primero\\. Visitá la página principal de tu bot para hacerlo\\.');
             return res.sendStatus(200);
         }
 
@@ -170,7 +174,8 @@ app.post('/telegram-webhook', async (req, res) => {
 
             const itemIds = itemsResponse.data.results;
             if (itemIds.length === 0) {
-                await sendTelegramMessage(chatId, '|📦| No tenés publicaciones activas en este momento\\.');
+                // Modificado: Escapando los '|' del emoji
+                await sendTelegramMessage(chatId, '\\|📦\\| No tenés publicaciones activas en este momento\\.');
                 return res.sendStatus(200);
             }
 
@@ -179,13 +184,15 @@ app.post('/telegram-webhook', async (req, res) => {
                 params: { ids: itemIds.join(','), attributes: 'id,title,price,currency_id,available_quantity,sold_quantity,permalink' }
             });
 
-            let reply = `*|📦| Información de tus ${detailsResponse.data.length} productos más recientes:*\n\n`;
+            // Modificado: Escapando los '|' del emoji en el título
+            let reply = `*\\|📦\\|* Información de tus ${detailsResponse.data.length} productos más recientes:\\\n\\\n`;
             detailsResponse.data.forEach(item => {
                 const body = item.body;
                 // **CORRECCIÓN CLAVE**: El link no se escapa, el resto sí.
                 reply += `*${escapeMarkdown(body.title)}*\n`;
-                reply += `   \\*|Precio|:* ${escapeMarkdown(body.currency_id)} ${escapeMarkdown(body.price)}\n`;
-                reply += `   \\*|Stock|:* ${escapeMarkdown(body.available_quantity)} \\| *Ventas:* ${escapeMarkdown(body.sold_quantity)}\n`;
+                // Modificado: Escapando los '|' de '|Precio|' y '|Stock|'
+                reply += `   \\*\\|Precio\\|:* ${escapeMarkdown(body.currency_id)} ${escapeMarkdown(body.price)}\n`;
+                reply += `   \\*\\|Stock\\|:* ${escapeMarkdown(body.available_quantity)} \\| *Ventas:* ${escapeMarkdown(body.sold_quantity)}\n`;
                 reply += `   \\[[Ver Producto](${body.permalink})\\]\n\n`; // Link funcional
             });
             await sendTelegramMessage(chatId, reply);
@@ -200,13 +207,16 @@ app.post('/telegram-webhook', async (req, res) => {
             
             const orders = ordersResponse.data.results;
             if (orders.length === 0) {
-                await sendTelegramMessage(chatId, '|✅| No tenes ventas recientes\\.');
+                // Modificado: Escapando los '|' del emoji
+                await sendTelegramMessage(chatId, '\\|✅\\| No tenes ventas recientes\\.');
             } else {
-                let reply = '*|🛒| Últimas 5 ventas:*\n\n';
+                // Modificado: Escapando los '|' del emoji en el título
+                let reply = '*\\|🛒\\|* Últimas 5 ventas:\\\n\\\n';
                 orders.forEach(order => {
-                    reply += `*|ID|:* \`${escapeMarkdown(order.id)}\`\n`;
-                    reply += `   \\*|Total|:* ${escapeMarkdown(order.currency_id)} ${escapeMarkdown(order.total_amount)}\n`;
-                    reply += `   \\*|Fecha|:* ${escapeMarkdown(new Date(order.date_created).toLocaleString('es-AR'))}\n\n`;
+                    // Modificado: Escapando los '|' de '|ID|', '|Total|', '|Fecha|'
+                    reply += `*\\|ID\\|:* \`${escapeMarkdown(order.id)}\`\n`;
+                    reply += `   \\*\\|Total\\|:* ${escapeMarkdown(order.currency_id)} ${escapeMarkdown(order.total_amount)}\n`;
+                    reply += `   \\*\\|Fecha\\|:* ${escapeMarkdown(new Date(order.date_created).toLocaleString('es-AR'))}\n\n`;
                 });
                 await sendTelegramMessage(chatId, reply);
             }
@@ -221,9 +231,11 @@ app.post('/telegram-webhook', async (req, res) => {
             
             const questions = questionsResponse.data.questions;
             if (questions.length === 0) {
-                await sendTelegramMessage(chatId, '|✅| No tenés preguntas pendientes para responder\\.');
+                // Modificado: Escapando los '|' del emoji
+                await sendTelegramMessage(chatId, '\\|✅\\| No tenés preguntas pendientes para responder\\.');
             } else {
-                let reply = '*|💬| Preguntas sin responder:*\n\n';
+                // Modificado: Escapando los '|' del emoji en el título
+                let reply = '*\\|💬\\|* Preguntas sin responder:\\\n\\\n';
                 questions.forEach(q => {
                     reply += `*En el producto:* \`${escapeMarkdown(q.item_id)}\`\n`;
                     reply += `   \\- _"${escapeMarkdown(q.text)}"_\n\n`;
@@ -233,13 +245,14 @@ app.post('/telegram-webhook', async (req, res) => {
         }
 
         else {
-             await sendTelegramMessage(chatId, '|🤔| Comando no reconocido\\. Enviá /menu para ver la lista de comandos\\.');
+             // Modificado: Escapando los '|' del emoji
+             await sendTelegramMessage(chatId, '\\|🤔\\| Comando no reconocido\\. Enviá /menu para ver la lista de comandos\\.');
         }
 
     } catch (error) {
         console.error('|❌| Error procesando comando:', error.response ? JSON.stringify(error.response.data) : error.message);
-        // Modificado: Se añadió el formato |❌|
-        await sendTelegramMessage(chatId, '|❌| Hubo un error al procesar tu solicitud\\. Por favor, revisá los logs del servidor\\.');
+        // Modificado: Escapando los '|' del emoji
+        await sendTelegramMessage(chatId, '\\|❌\\| Hubo un error al procesar tu solicitud\\. Por favor, revisá los logs del servidor\\.');
     }
     
     res.sendStatus(200);
@@ -247,6 +260,5 @@ app.post('/telegram-webhook', async (req, res) => {
 
 // --- INICIAR SERVIDOR ---
 app.listen(PORT, () => {
-    // Modificado: Se añadió el formato |🚀|
     console.log(`|🚀| Servidor funcionando en http://localhost:${PORT}`);
 });
