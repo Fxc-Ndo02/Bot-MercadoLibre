@@ -219,7 +219,6 @@ app.post('/telegram-webhook', async (req, res) => {
 
         // --- Comando /productinfo (FORMATO CORREGIDO) ---
         if (text === '/productinfo') {
-            // Se elimina el 'limit: 5' para obtener todos los productos activos (hasta el límite de la API, usualmente 50)
             const itemsResponse = await axios.get(`https://api.mercadolibre.com/users/${tokens.user_id}/items/search`, {
                 headers: authHeaders,
                 params: { status: 'active' } 
@@ -231,28 +230,30 @@ app.post('/telegram-webhook', async (req, res) => {
                 return res.sendStatus(200);
             }
 
-            // Solicitamos los detalles de los productos encontrados
             const detailsResponse = await axios.get(`https://api.mercadolibre.com/items`, {
                 headers: authHeaders,
                 params: { ids: itemIds.join(','), attributes: 'id,title,price,currency_id,available_quantity,sold_quantity,permalink' }
             });
 
-            // Usamos el conteo real de productos para el encabezado
             let reply = `\\|📦\\| Información de tus ${detailsResponse.data.length} productos más recientes:\n\n`;
             
             detailsResponse.data.forEach((item, index) => {
                 const body = item.body;
                 const productIndex = index + 1;
 
+                // **Formato de Precio Automático**
+                const formattedPrice = new Intl.NumberFormat('es-AR', { style: 'currency', currency: body.currency_id }).format(body.price);
+
                 // Se agrega \\. para escapar el punto después del número de lista 
                 reply += `${productIndex}\\. ${escapeMarkdown(body.title)}\n`;
                 reply += `\\|ID\\|: ${escapeMarkdown(body.id)}\n`; 
-                reply += `\\|Precio\\|: ${escapeMarkdown(body.currency_id)} ${escapeMarkdown(body.price)}\n`;
+                reply += `\\|Precio\\|: ${escapeMarkdown(formattedPrice)}\n`; // Usamos el precio formateado
                 reply += `\\|Stock\\|: ${escapeMarkdown(body.available_quantity)}\n`;
                 reply += `\\|Ventas\\|: ${escapeMarkdown(body.sold_quantity)}\n`;
 
-                // **Corregido:** Se escapa el enlace y los paréntesis para evitar errores de Markdown V2
-                reply += `\\[Ver Producto\\]\\(${escapeMarkdown(body.permalink)}\\)\n\n`; 
+                // **Enlace Clicable:** Usamos la sintaxis de Markdown V2 [Texto](URL) sin escapar los corchetes,
+                // asegurándonos de que sea un enlace válido y clicable.
+                reply += `[Ver Producto](${escapeMarkdown(body.permalink)})\n\n`; 
             });
             await sendTelegramMessage(chatId, reply);
         }
@@ -271,7 +272,7 @@ app.post('/telegram-webhook', async (req, res) => {
                 let reply = `\\|🛒\\| Últimas 5 ventas:\n\n`; 
 
                 orders.forEach(order => {
-                    // Formato de precio con formato de moneda (ARS $XX.XXX,00)
+                    // Formato de precio con formato de moneda 
                     const formattedPrice = new Intl.NumberFormat('es-AR', { style: 'currency', currency: order.currency_id }).format(order.total_amount);
 
                     // Formato de fecha y hora: 05/07/2025 / 05:23:11
