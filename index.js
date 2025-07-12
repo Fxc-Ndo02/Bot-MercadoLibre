@@ -217,11 +217,12 @@ app.post('/telegram-webhook', async (req, res) => {
 
         const authHeaders = { 'Authorization': `Bearer ${tokens.access_token}` };
 
-        // --- Comando /productinfo (MEJORADO Y CORREGIDO) ---
+        // --- Comando /productinfo (SIN IMAGEN, FORMATO ANTERIOR RESTAURADO) ---
         if (text === '/productinfo') {
             const itemsResponse = await axios.get(`https://api.mercadolibre.com/users/${tokens.user_id}/items/search`, {
                 headers: authHeaders,
-                params: { status: 'active', limit: 5 } // Solo los primeros 5 para una respuesta rápida
+                // QUITAMOS 'thumbnail' de los atributos solicitados
+                params: { status: 'active', limit: 5 } 
             });
 
             const itemIds = itemsResponse.data.results;
@@ -230,10 +231,10 @@ app.post('/telegram-webhook', async (req, res) => {
                 return res.sendStatus(200);
             }
 
+            // Solicitamos solo los atributos necesarios para el formato sin imagen
             const detailsResponse = await axios.get(`https://api.mercadolibre.com/items`, {
                 headers: authHeaders,
-                // Solicitamos la URL de la imagen principal (thumbnail)
-                params: { ids: itemIds.join(','), attributes: 'id,title,price,currency_id,available_quantity,sold_quantity,permalink,thumbnail' }
+                params: { ids: itemIds.join(','), attributes: 'id,title,price,currency_id,available_quantity,sold_quantity,permalink' }
             });
 
             let reply = `*\\|📦\\|* Información de tus ${detailsResponse.data.length} productos más recientes:\\\n\\\n`;
@@ -247,12 +248,8 @@ app.post('/telegram-webhook', async (req, res) => {
                 reply += `   *\\|Precio\\|:* ${escapeMarkdown(body.currency_id)} ${escapeMarkdown(body.price)}\\n`;
                 reply += `   *\\|Stock\\|:* ${escapeMarkdown(body.available_quantity)} \\| *\\|Ventas\\|:* ${escapeMarkdown(body.sold_quantity)}\\n`;
 
-                // CORRECCIÓN: Usamos la sintaxis correcta para los enlaces en MarkdownV2. 
-                // El texto del enlace [Imagen] y [Ver Producto] no necesitan escapar los corchetes, solo el URL.
-                if (body.thumbnail) {
-                    reply += `   *[Imagen](${escapeMarkdown(body.thumbnail)})* \\| `;
-                }
-                reply += `*\\[[Ver Producto](${escapeMarkdown(body.permalink)})\\]*\n\n`; 
+                // Formato de enlace restaurado a la versión anterior
+                reply += `   *\\[[Ver Producto](${escapeMarkdown(body.permalink)})\\]*\n\n`; 
             });
             await sendTelegramMessage(chatId, reply);
         }
