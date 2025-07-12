@@ -135,7 +135,7 @@ app.post('/telegram-webhook', async (req, res) => {
                      `*\\|/productinfo\\|* \\- Muestra informacion de tus productos\\.\\\n` +
                      `*\\|/checksales\\|* \\- Revisa las últimas ventas concretadas\\.\\\n` +
                      `*\\|/checkquestions\\|* \\- Muestra preguntas las preguntass pendientes\\.\\\n` +
-                     `*\\|/responder \<ID\>\\|* \\- Responde una pregunta específica por su ID\\.\\\n` + // <--- CORRECCIÓN DE FORMATO APLICADA AQUÍ
+                     `*\\|/responder \\(ID\\)\\|* \\- Responde una pregunta específica por su ID\\.\\\n` + // <--- Se cambió <ID> por (ID) y se escaparon
                      `*\\|/status\\|* \\- Verifica el estado de CosmeticaSPA\\-BOT\\.`;
         await sendTelegramMessage(chatId, menu);
         return res.sendStatus(200);
