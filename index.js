@@ -1,4 +1,4 @@
-// index.js 
+// index.js
 
 require('dotenv').config();
 const express = require('express');
@@ -190,7 +190,7 @@ app.post('/telegram-webhook', async (req, res) => {
     // Comandos públicos
     if (text === '/start' || text === '/menu' || text === '/help') {
         // Se agregó /setstock y /checkshipment al menú
-        const menu = `*\\|🤓☝\\|*\\ Estos son los comandos disponibles:\\\n\\\n` +
+        const menu = `*\\|👋\\|*\\ Estos son los comandos disponibles:\\\n\\\n` +
                      `*\\|/productinfo\\|* \\- Muestra informacion de tus productos\\.\\\n` +
                      `*\\|/checksales\\|* \\- Revisa las últimas ventas concretadas\\.\\\n` +
                      `*\\|/checkquestions\\|* \\- Muestra preguntas las preguntass pendientes\\.\\\n` +
@@ -217,7 +217,7 @@ app.post('/telegram-webhook', async (req, res) => {
 
         const authHeaders = { 'Authorization': `Bearer ${tokens.access_token}` };
 
-        // --- Comando /productinfo (FORMATO MODIFICADO Y SIN LÍMITE DE PRODUCTOS) ---
+        // --- Comando /productinfo (FORMATO CORREGIDO) ---
         if (text === '/productinfo') {
             // Se elimina el 'limit: 5' para obtener todos los productos activos (hasta el límite de la API, usualmente 50)
             const itemsResponse = await axios.get(`https://api.mercadolibre.com/users/${tokens.user_id}/items/search`, {
@@ -244,22 +244,20 @@ app.post('/telegram-webhook', async (req, res) => {
                 const body = item.body;
                 const productIndex = index + 1;
 
-                // Formato sin negritas y sin indentación.
-                // IMPORTANTE: Se agrega \\. para escapar el punto después del número de lista.
+                // Se agrega \\. para escapar el punto después del número de lista y evitar el error de Markdown V2
                 reply += `${productIndex}\\. ${escapeMarkdown(body.title)}\n`;
                 reply += `\\|ID\\|: ${escapeMarkdown(body.id)}\n`; 
                 reply += `\\|Precio\\|: ${escapeMarkdown(body.currency_id)} ${escapeMarkdown(body.price)}\n`;
                 reply += `\\|Stock\\|: ${escapeMarkdown(body.available_quantity)}\n`;
                 reply += `\\|Ventas\\|: ${escapeMarkdown(body.sold_quantity)}\n`;
 
-                // Formato del enlace: [Ver Producto](URL)
-                // Se usa escapeMarkdown en el URL para asegurar que sea válido.
+                // Se utiliza la sintaxis de enlace de Markdown V2 estándar [Texto](URL)
                 reply += `\\[Ver Producto\\](${escapeMarkdown(body.permalink)})\n\n`; 
             });
             await sendTelegramMessage(chatId, reply);
         }
 
-        // --- Comando /checksales (FORMATO CORREGIDO Y MEJORADO) ---
+        // --- Comando /checksales (FORMATO CORREGIDO) ---
         else if (text === '/checksales') {
             const ordersResponse = await axios.get('https://api.mercadolibre.com/orders/search', {
                 headers: authHeaders,
@@ -270,7 +268,6 @@ app.post('/telegram-webhook', async (req, res) => {
             if (orders.length === 0) {
                 await sendTelegramMessage(chatId, '\\|✅\\| No tenes ventas recientes\\.');
             } else {
-                // El encabezado utiliza \\| para escapar los | en MarkdownV2
                 let reply = `\\|🛒\\| Últimas 5 ventas:\n\n`; 
 
                 orders.forEach(order => {
@@ -286,21 +283,19 @@ app.post('/telegram-webhook', async (req, res) => {
                         hour: '2-digit', 
                         minute: '2-digit', 
                         second: '2-digit',
-                        hour12: false // Formato 24h
-                    }).format(orderDate).replace(', ', ' / '); // Reemplazar la coma por " / " si existe
+                        hour12: false
+                    }).format(orderDate).replace(/, /g, ' / ');
 
-                    // IMPORTANTE: Eliminamos \\ antes de \n para que se genere un salto de línea real.
+                    // Se eliminan los escapes innecesarios de las \n para que funcionen los saltos de línea
                     reply += `\\|ID\\|: ${escapeMarkdown(order.id)}\n`;
                     reply += `\\|Total\\|: ${escapeMarkdown(formattedPrice)}\n`;
                     reply += `\\|Comprador\\|: ${escapeMarkdown(order.buyer.nickname)}\n`;
                     reply += `\\|Fecha\\|: ${escapeMarkdown(formattedDate)}\n`;
                     
-                    // Si tiene ID de envío, lo incluimos con el comando de seguimiento
                     if (order.shipping && order.shipping.id) {
-                         // Formato: |Envío|: /checkshipment ID
                          reply += `\\|Envío\\|: ${escapeMarkdown(`/checkshipment ${order.shipping.id}`)}\n`;
                     }
-                    reply += `\n`; // Línea vacía entre ventas
+                    reply += `\n`; 
                 });
                 await sendTelegramMessage(chatId, reply);
             }
