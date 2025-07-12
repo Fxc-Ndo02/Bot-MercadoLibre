@@ -1,4 +1,4 @@
-// index.js (Actualizado: /productinfo para todos los productos)
+// index.js (Corregido: Uso de seller_id en comandos)
 
 require('dotenv').config();
 const express = require('express');
@@ -25,7 +25,6 @@ async function sendTelegramMessage(chatId, text) {
     await axios.post(telegramApiUrl, {
       chat_id: chatId,
       text: text,
-      // Usamos 'Markdown' para que los mensajes de los comandos se vean bien
       parse_mode: 'Markdown', 
     });
     console.log('|☑️| Notificación de Telegram enviada con éxito.');
@@ -52,10 +51,8 @@ async function refreshAccessToken(refreshToken) {
         );
         
         const data = response.data;
-        // Calcular la nueva hora de expiración
         data.expires_at = Date.now() + (data.expires_in * 1000); 
 
-        // Guardar el nuevo token y la hora de expiración en tokens.json
         fs.writeFileSync('tokens.json', JSON.stringify(data, null, 2));
         console.log('|💾| Token de acceso refrescado y guardado.');
         return data.access_token;
@@ -82,13 +79,11 @@ async function ensureAccessToken() {
         if (tokens.expires_at && Date.now() >= tokens.expires_at - 60000) {
             console.log('|⏳| El token de acceso ha expirado o está a punto de expirar.');
             
-            // Refrescar el token y guardar el nuevo objeto
             const newAccessToken = await refreshAccessToken(tokens.refresh_token);
             tokens = JSON.parse(fs.readFileSync('tokens.json', 'utf8')); // Recargar el objeto tokens actualizado
             return tokens;
         }
 
-        // Si el token es válido, retornar el objeto completo de tokens
         return tokens;
 
     } catch (error) {
@@ -101,29 +96,24 @@ async function ensureAccessToken() {
 
 // Funciones Auxiliares para /productinfo
 
-// Función para obtener los IDs de los productos de un usuario
 async function getUserItems(userId, accessToken) {
     // Buscamos hasta 50 productos activos
     const response = await axios.get(`https://api.mercadolibre.com/users/${userId}/items/search`, {
         headers: { 'Authorization': `Bearer ${accessToken}` },
         params: { status: 'active', limit: 50 } 
     });
-    // results contiene una lista de IDs de ítems
     return response.data.results; 
 }
 
-// Función para obtener detalles de múltiples productos usando un solo llamado a la API
 async function getItemsDetails(itemIds, accessToken) {
     if (itemIds.length === 0) return [];
     
-    // Usamos el endpoint /items para obtener detalles de varios IDs a la vez
     const url = `https://api.mercadolibre.com/items?ids=${itemIds.join(',')}&attributes=id,title,price,available_quantity,sold_quantity,status,permalink,currency_id`;
     
     const response = await axios.get(url, {
         headers: { 'Authorization': `Bearer ${accessToken}` }
     });
     
-    // La respuesta contiene un array de objetos { body: item_details, code: 200 }
     return response.data.map(result => result.body).filter(item => item !== undefined); 
 }
 
@@ -168,7 +158,6 @@ app.get('/callback', async (req, res) => {
       
       console.log('|☑️| ¡Autenticado correctamente!');
       
-      // AÑADIR HORA DE EXPIRACIÓN Y USER_ID (ya está en la respuesta de oauth/token)
       data.expires_at = Date.now() + (data.expires_in * 1000); 
 
       fs.writeFileSync('tokens.json', JSON.stringify(data, null, 2));
@@ -240,19 +229,18 @@ app.post('/telegram-webhook', async (req, res) => {
 
         } else if (text === '/menu' || text === '/help') {
             const menuMessage = `
-|🛠️| Comandos Disponibles:
-|/status| - Verifica si CosmeticaSPA-BOT está activo.
-|/menu| - Muestra este menú de comandos.
-|/checksales| - Verifica si hay ventas recientes.
-|/checkquestions| - Verifica si hay preguntas recientes.
-|/productinfo| - Obtiene información de tus productos activos.
+|🛠️| **Comandos Disponibles:**
+/status - Verifica si CosmeticaSPA-BOT está activo.
+/menu - Muestra este menú de comandos.
+/checksales - Verifica si hay ventas recientes.
+/checkquestions - Verifica si hay preguntas recientes.
+/productinfo - Obtiene información de tus productos activos.
 `;
             await sendTelegramMessage(chatId, menuMessage);
             return res.sendStatus(200);
         }
 
         // Comandos que requieren el token de Mercado Libre
-        // ensureAccessToken() ahora verifica y refresca el token, y retorna el objeto completo.
         const tokens = await ensureAccessToken(); 
 
         if (!tokens || !tokens.access_token) {
@@ -266,27 +254,28 @@ app.post('/telegram-webhook', async (req, res) => {
         // Manejar /checksales
         if (text === '/checksales') {
             try {
-                const response = await axios.get('https://api.mercadolibre.com/orders/search/recent', {
+                // CORREGIDO: Usamos el endpoint de ventas del usuario específico
+                const response = await axios.get(`https://api.mercadolibre.com/users/${userId}/orders/search/recent`, {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
 
                 const orders = response.data.results;
-                let reply = '|🛒| Ventas Recientes (Últimas 5):\n\n';
+                let reply = '|🛒| **Ventas Recientes (Últimas 5):**\n\n';
 
                 if (orders.length === 0) {
                     reply = '|🔎| No se encontraron ventas recientes.';
                 } else {
                     orders.slice(0, 5).forEach(order => {
-                        reply += `* |Venta ID|: ${order.id}\n`;
-                        reply += `  |Estado|: ${order.status_detail.status}\n`;
-                        reply += `  |Total|: ${order.currency_id} ${order.total_amount}\n`;
-                        reply += `  |Fecha|: ${new Date(order.date_created).toLocaleString()}\n\n`;
+                        reply += `* Venta ID: ${order.id}\n`;
+                        reply += `  Estado: ${order.status_detail.status}\n`;
+                        reply += `  Total: ${order.currency_id} ${order.total_amount}\n`;
+                        reply += `  Fecha: ${new Date(order.date_created).toLocaleString()}\n\n`;
                     });
                 }
                 await sendTelegramMessage(chatId, reply);
             } catch (error) {
                 console.error('|❌| Error al obtener ventas:', error.response ? error.response.data : error.message);
-                await sendTelegramMessage(chatId, '|❌| Error al verificar ventas. El token puede ser inválido o hubo un problema de conexión.');
+                await sendTelegramMessage(chatId, '|❌| Error al verificar ventas. Asegúrate de que el token es válido o intenta de nuevo más tarde.');
             }
             return res.sendStatus(200);
         }
@@ -294,10 +283,12 @@ app.post('/telegram-webhook', async (req, res) => {
         // Manejar /checkquestions
         if (text === '/checkquestions') {
             try {
+                // CORREGIDO: Añadimos el parámetro seller_id, que es requerido para buscar preguntas de un vendedor.
                 const response = await axios.get('https://api.mercadolibre.com/questions/search', {
                     headers: { 'Authorization': `Bearer ${accessToken}` },
                     params: { 
-                        status: 'UNANSWERED' 
+                        status: 'UNANSWERED',
+                        seller_id: userId // <-- Importante: Añadido el seller_id
                     }
                 });
 
@@ -317,7 +308,7 @@ app.post('/telegram-webhook', async (req, res) => {
                 await sendTelegramMessage(chatId, reply);
             } catch (error) {
                 console.error('|❌| Error al obtener preguntas:', error.response ? error.response.data : error.message);
-                await sendTelegramMessage(chatId, '|❌| Error al verificar preguntas. El token puede ser inválido o hubo un problema de conexión.');
+                await sendTelegramMessage(chatId, '|❌| Error al verificar preguntas. Asegúrate de que el token es válido o intenta de nuevo más tarde.');
             }
             return res.sendStatus(200);
         }
@@ -333,24 +324,21 @@ app.post('/telegram-webhook', async (req, res) => {
                     return res.sendStatus(200);
                 }
 
-                // 2. Obtener detalles de los productos (usando la función auxiliar getItemsDetails)
+                // 2. Obtener detalles de los productos
                 const itemsDetails = await getItemsDetails(itemIds, accessToken);
 
-                let reply = `|📦| Información de ${itemsDetails.length} Productos Activos:\n\n`;
+                let reply = `|📦| **Información de ${itemsDetails.length} Productos Activos:**\n\n`;
 
                 itemsDetails.forEach(item => {
                     reply += `**${item.title}**\n`;
-                    reply += `|ID|: ${item.id}\n`;
-                    reply += `|Precio|: ${item.currency_id} ${item.price}\n`;
-                    reply += `|Stock disponible|: ${item.available_quantity}\n`;
-                    reply += `|Ventas totales|: ${item.sold_quantity}\n`;
-                    reply += `|Estado|: ${item.status}\n`;
-                    reply += `|Ver|: ${item.permalink}\n\n`;
+                    reply += `* ID: ${item.id}\n`;
+                    reply += `* Precio: ${item.currency_id} ${item.price}\n`;
+                    reply += `* Stock disponible: ${item.available_quantity}\n`;
+                    reply += `* Ventas totales: ${item.sold_quantity}\n`;
+                    reply += `* Estado: ${item.status}\n`;
+                    reply += `* Ver: ${item.permalink}\n\n`;
                 });
 
-                // Telegram tiene un límite de 4096 caracteres. 
-                // Si la respuesta es muy larga, puede que necesitemos dividirla. 
-                // Por ahora, enviamos la respuesta completa y manejamos posibles errores si es demasiado larga.
                 await sendTelegramMessage(chatId, reply);
 
             } catch (error) {
@@ -365,7 +353,7 @@ app.post('/telegram-webhook', async (req, res) => {
         return res.sendStatus(200);
     }
 
-    // Si el mensaje no tiene texto (por ejemplo, una imagen), respondemos 200 OK
+    // Si el mensaje no tiene texto, respondemos 200 OK
     res.sendStatus(200);
 });
 
