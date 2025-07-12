@@ -16,7 +16,7 @@ const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 // Función para enviar mensajes a Telegram
 async function sendTelegramMessage(chatId, text) {
   if (!TELEGRAM_BOT_TOKEN) {
-    console.error('❌ Error: TELEGRAM_BOT_TOKEN no está configurado.');
+    console.error('|❌|Error: TELEGRAM_BOT_TOKEN no está configurado.');
     return;
   }
   
@@ -27,10 +27,10 @@ async function sendTelegramMessage(chatId, text) {
       chat_id: chatId,
       text: text,
     });
-    console.log('✅ Notificación de Telegram enviada con éxito.');
+    console.log('|✅|Notificación de Telegram enviada con éxito.');
   } catch (error) {
     // Manejar errores de Axios, por ejemplo, si el chat_id es inválido o el bot está bloqueado
-    console.error('❌ Error al enviar mensaje a Telegram:', error.response ? error.response.data : error.message);
+    console.error('|❌|Error al enviar mensaje a Telegram:', error.response ? error.response.data : error.message);
   }
 }
 
@@ -68,20 +68,20 @@ app.get('/callback', async (req, res) => {
 
     if (data.access_token) {
       if (TELEGRAM_CHAT_ID) {
-          await sendTelegramMessage(TELEGRAM_CHAT_ID, '✅ ¡Tu bot de Mercado Libre se ha vinculado correctamente!');
+          await sendTelegramMessage(TELEGRAM_CHAT_ID, '|✅|¡CosmeticaSPA-BOT se ha vinculado correctamente!');
       }
       
-      console.log('✅ ¡Autenticado correctamente!');
+      console.log('|✅|¡Autenticado correctamente!');
       fs.writeFileSync('tokens.json', JSON.stringify(data, null, 2));
-      console.log('💾 Tokens guardados en tokens.json');
+      console.log('|💾|Tokens guardados en tokens.json');
       
       res.send('<h3>Cuenta vinculada correctamente!</h3><p>Ya podés recibir notificaciones y usar la API.</p>');
     } else {
-      console.error('❌ Error al obtener token:', data);
+      console.error('|❌|Error al obtener token:', data);
       res.status(500).send('No se pudo autenticar. Revisa la consola.');
     }
   } catch (error) {
-    console.error('❌ Error en la solicitud de token:', error);
+    console.error('|❌|Error en la solicitud de token:', error);
     res.status(500).send('Error interno del servidor.'); 
   }
 });
@@ -89,10 +89,10 @@ app.get('/callback', async (req, res) => {
 // 7. Ruta webhook para recibir notificaciones de Mercado Libre
 app.post('/webhook', async (req, res) => {
   try {
-    console.log('📩 Notificación de Mercado Libre recibida:', req.body);
+    console.log('|📩|Notificación de Mercado Libre recibida:', req.body);
     
     if (!TELEGRAM_CHAT_ID) {
-        console.error('❌ TELEGRAM_CHAT_ID no configurado. No se puede enviar notificación a Telegram.');
+        console.error('|❌|"TELEGRAM_CHAT_ID" no configurado. No se puede enviar notificación a Telegram.');
         res.sendStatus(200);
         return;
     }
@@ -101,9 +101,9 @@ app.post('/webhook', async (req, res) => {
     let message = 'Nueva notificación de Mercado Libre recibida.\n';
     
     if (notification.topic === 'questions') {
-      message += `💬 ¡Nueva Pregunta recibida!\nRecurso: ${notification.resource}`;
+      message += `|💬|¡Nueva Pregunta recibida!\nRecurso: ${notification.resource}`;
     } else if (notification.topic === 'orders_v2') {
-      message += `🛒 ¡Nueva Venta!\nRecurso: ${notification.resource}`;
+      message += `|🛒|¡Nueva Venta!\nRecurso: ${notification.resource}`;
     } else {
       message += `Tipo: ${notification.topic}`;
       message += `\nRecurso: ${notification.resource}`;
@@ -114,7 +114,7 @@ app.post('/webhook', async (req, res) => {
     // Confirmar la recepción a Mercado Libre
     res.sendStatus(200); 
   } catch (error) {
-    console.error('❌ Error en el procesamiento del webhook de Mercado Libre:', error);
+    console.error('|❌|Error en el procesamiento del webhook de Mercado Libre:', error);
     res.status(500).send('Error interno del servidor.');
   }
 });
@@ -132,12 +132,12 @@ app.post('/telegram-webhook', async (req, res) => {
         const chatId = message.chat.id;
         const text = message.text;
 
-        console.log(`🤖 Comando recibido desde Telegram: ${text} (Chat ID: ${chatId})`);
+        console.log(`|✅|Comando recibido desde Telegram: ${text} (Chat ID: ${chatId})`);
 
         // Manejar el comando /status
         if (text === '/status') {
             // Responder al comando /status
-            const statusMessage = `🟢 Bot Activo en Render.com\nÚltima verificación: ${new Date().toLocaleString('es-AR')}`;
+            const statusMessage = `|👋🤖|Bot Activo\n-Última verificación: ${new Date().toLocaleString('es-AR')}`;
             await sendTelegramMessage(chatId, statusMessage);
         } else {
             // Si el mensaje no es un comando conocido, puedes responder si deseas
