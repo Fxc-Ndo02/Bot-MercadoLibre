@@ -1,8 +1,8 @@
 // index.js
- 
+
 require('dotenv').config();
 const express = require('express');
-const fs = require('fs'); // <--- Añadido: Importar el módulo 'fs'
+const fs = require('fs');
 const { escapeMarkdown, sendTelegramMessage } = require('./utils/telegram');
 const { ensureAccessToken, answerQuestion } = require('./utils/mercadolibre');
 const { userContexts } = require('./utils/state');
@@ -27,7 +27,6 @@ app.get('/callback', async (req, res) => {
     const { code } = req.query;
     if (!code) return res.status(400).send('Error: Falta el código de autorización.');
     try {
-        // La lógica de obtener y guardar tokens se maneja internamente en ensureAccessToken al pasar el código
         const response = await axios.post('https://api.mercadolibre.com/oauth/token', new URLSearchParams({
             grant_type: 'authorization_code',
             client_id: process.env.CLIENT_ID,
@@ -39,7 +38,7 @@ app.get('/callback', async (req, res) => {
         const data = response.data;
         data.expires_at = Date.now() + (data.expires_in * 1000);
         
-        // Guardar el token inicial (requiere 'fs')
+        // Guardar el token inicial
         fs.writeFileSync('tokens.json', JSON.stringify(data, null, 2)); 
 
         if (process.env.TELEGRAM_CHAT_ID) {
@@ -77,7 +76,7 @@ app.post('/webhook', async (req, res) => {
             const message = `*\\|❓\\| Nueva pregunta recibida:*\\\n\\\n` +
                             `*Producto:* ${escapeMarkdown(question.item_id)}\\\n` +
                             `*Pregunta:* _"${escapeMarkdown(question.text)}"_\\\n\\\n` +
-                            `Puedes responder esta pregunta directamente usando: \`/responder ${questionId} <tu respuesta>\``;
+                            `Puedes responder esta pregunta directamente usando: \`/responder ${questionId}\``;
             
             await sendTelegramMessage(process.env.TELEGRAM_CHAT_ID, message);
 
@@ -136,6 +135,7 @@ app.post('/telegram-webhook', async (req, res) => {
                      `*\\|/productinfo\\|* \\- Muestra informacion de tus productos\\.\\\n` +
                      `*\\|/checksales\\|* \\- Revisa las últimas ventas concretadas\\.\\\n` +
                      `*\\|/checkquestions\\|* \\- Muestra preguntas las preguntass pendientes\\.\\\n` +
+                     `*\\|/responder <ID>\\|* \\- Responde una pregunta específica por su ID\\.\\\n` + // <--- Añadido: Comando /responder
                      `*\\|/status\\|* \\- Verifica el estado de CosmeticaSPA\\-BOT\\.`;
         await sendTelegramMessage(chatId, menu);
         return res.sendStatus(200);
