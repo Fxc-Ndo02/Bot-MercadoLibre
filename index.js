@@ -190,7 +190,7 @@ app.post('/telegram-webhook', async (req, res) => {
     // Comandos públicos
     if (text === '/start' || text === '/menu' || text === '/help') {
         // Se agregó /setstock y /checkshipment al menú
-        const menu = `*\\|👋\\|*\\ Estos son los comandos disponibles:\\\n\\\n` +
+        const menu = `*\\|🤓☝\\|*\\ Estos son los comandos disponibles:\\\n\\\n` +
                      `*\\|/productinfo\\|* \\- Muestra informacion de tus productos\\.\\\n` +
                      `*\\|/checksales\\|* \\- Revisa las últimas ventas concretadas\\.\\\n` +
                      `*\\|/checkquestions\\|* \\- Muestra preguntas las preguntass pendientes\\.\\\n` +
