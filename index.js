@@ -68,7 +68,7 @@ app.get('/callback', async (req, res) => {
 
     if (data.access_token) {
       if (TELEGRAM_CHAT_ID) {
-          await sendTelegramMessage(TELEGRAM_CHAT_ID, '|✅| ¡CosmeticaSPA-BOT se ha vinculado correctamente!');
+          await sendTelegramMessage(TELEGRAM_CHAT_ID, '|✅| **¡CosmeticaSPA-BOT se ha vinculado correctamente!**');
       }
       
       console.log('|✅| ¡Autenticado correctamente!');
@@ -101,9 +101,9 @@ app.post('/webhook', async (req, res) => {
     let message = 'Nueva notificación de Mercado Libre recibida.\n';
     
     if (notification.topic === 'questions') {
-      message += `|💬| ¡Nueva Pregunta recibida!\nRecurso: ${notification.resource}`;
+      message += `|💬| **¡Nueva Pregunta recibida!**\nRecurso: ${notification.resource}`;
     } else if (notification.topic === 'orders_v2') {
-      message += `|🛒| ¡Nueva Venta!\nRecurso: ${notification.resource}`;
+      message += `|🛒| **¡Nueva Venta!**\nRecurso: ${notification.resource}`;
     } else {
       message += `Tipo: ${notification.topic}`;
       message += `\nRecurso: ${notification.resource}`;
@@ -132,16 +132,27 @@ app.post('/telegram-webhook', async (req, res) => {
         const chatId = message.chat.id;
         const text = message.text;
 
-        console.log(`|✅| Comando recibido desde Telegram: ${text} (Chat ID: ${chatId})`);
+        console.log(`|☑️| Comando recibido desde Telegram: ${text} (Chat ID: ${chatId})`);
 
         // Manejar el comando /status
         if (text === '/status') {
-            // Responder al comando /status
-            const statusMessage = `|👋🤖| CosmeticaSPA-BOT esta activo\n-Última verificación: ${new Date().toLocaleString('es-AR')}`;
+            const statusMessage = `|🤖👋| **CosmeticaSPA-BOT** esta activo\n**-Última verificación:** ${new Date().toLocaleString('es-AR')}`;
             await sendTelegramMessage(chatId, statusMessage);
+
+        // Manejar el comando /menu o /help
+        } else if (text === '/menu' || text === '/help') {
+            const menuMessage = `
+|🛠️| **Comandos Disponibles:**
+**/status** - Verifica si el bot está activo en Render.com.
+**/menu** - Muestra este menú de comandos.
+`;
+            // Nota: Aquí enviamos el mensaje con formato Markdown básico si es necesario.
+            await sendTelegramMessage(chatId, menuMessage);
+
         } else {
-            // Si el mensaje no es un comando conocido, puedes responder si deseas
-            // await sendTelegramMessage(chatId, 'Hola! Envía /status para verificar el estado de actividad del bot.');
+            // Manejar otros mensajes o comandos no reconocidos
+            // Opcional: enviar un mensaje predeterminado si el usuario envía algo que no es un comando
+            // await sendTelegramMessage(chatId, 'Hola! Soy tu bot. Envía /menu para ver los comandos.');
         }
     }
 
