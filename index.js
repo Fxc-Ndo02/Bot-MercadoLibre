@@ -1,4 +1,4 @@
-// index.js (Corregido: Uso de seller_id en comandos)
+// index.js (Versión mejorada con fix para /checksales)
 
 require('dotenv').config();
 const express = require('express');
@@ -254,9 +254,13 @@ app.post('/telegram-webhook', async (req, res) => {
         // Manejar /checksales
         if (text === '/checksales') {
             try {
-                // CORREGIDO: Usamos el endpoint de ventas del usuario específico
-                const response = await axios.get(`https://api.mercadolibre.com/users/${userId}/orders/search/recent`, {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                // CORRECCIÓN: Usamos el endpoint /orders/search con el parámetro seller
+                const response = await axios.get('https://api.mercadolibre.com/orders/search', {
+                    headers: { 'Authorization': `Bearer ${accessToken}` },
+                    params: {
+                        seller: userId, // Usamos el user_id como seller
+                        sort: 'date_desc' 
+                    }
                 });
 
                 const orders = response.data.results;
@@ -267,7 +271,7 @@ app.post('/telegram-webhook', async (req, res) => {
                 } else {
                     orders.slice(0, 5).forEach(order => {
                         reply += `* Venta ID: ${order.id}\n`;
-                        reply += `  Estado: ${order.status_detail.status}\n`;
+                        reply += `  Estado: ${order.status || (order.status_detail ? order.status_detail.status : 'Desconocido')}\n`;
                         reply += `  Total: ${order.currency_id} ${order.total_amount}\n`;
                         reply += `  Fecha: ${new Date(order.date_created).toLocaleString()}\n\n`;
                     });
@@ -288,7 +292,7 @@ app.post('/telegram-webhook', async (req, res) => {
                     headers: { 'Authorization': `Bearer ${accessToken}` },
                     params: { 
                         status: 'UNANSWERED',
-                        seller_id: userId // <-- Importante: Añadido el seller_id
+                        seller_id: userId 
                     }
                 });
 
