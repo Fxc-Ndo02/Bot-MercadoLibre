@@ -1,4 +1,4 @@
-// index.js (Versión mejorada con fix para /checksales)
+// index.js (Versión mejorada con fix para /checksales y escaping de Markdown)
 
 require('dotenv').config();
 const express = require('express');
@@ -11,6 +11,18 @@ const PORT = process.env.PORT || 3000;
 // Obtener las credenciales de Telegram desde las variables de entorno
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID; 
+
+// Función auxiliar para escapar caracteres especiales de Markdown
+// (Necesario para datos dinámicos de la API de ML)
+function escapeMarkdown(text) {
+    // Escapar caracteres que tienen un significado especial en Markdown V2
+    // Aunque usamos parse_mode: 'Markdown' (V1), es seguro y recomendado escapar los caracteres comunes para evitar errores de parseo.
+    if (text === null || text === undefined) {
+        return '';
+    }
+    return text.toString().replace(/([_*`[\]()~>#+=|{}.!-])/g, '\\$1');
+}
+
 
 // Función para enviar mensajes a Telegram (con estilo y Markdown)
 async function sendTelegramMessage(chatId, text) {
@@ -270,10 +282,13 @@ app.post('/telegram-webhook', async (req, res) => {
                     reply = '|🔎| No se encontraron ventas recientes.';
                 } else {
                     orders.slice(0, 5).forEach(order => {
-                        reply += `* Venta ID: ${order.id}\n`;
-                        reply += `  Estado: ${order.status || (order.status_detail ? order.status_detail.status : 'Desconocido')}\n`;
-                        reply += `  Total: ${order.currency_id} ${order.total_amount}\n`;
-                        reply += `  Fecha: ${new Date(order.date_created).toLocaleString()}\n\n`;
+                        const statusText = order.status || (order.status_detail ? order.status_detail.status : 'Desconocido');
+                        
+                        // Escapamos los datos dinámicos antes de añadirlos al mensaje
+                        reply += `* Venta ID: ${escapeMarkdown(order.id)}\n`;
+                        reply += `  Estado: ${escapeMarkdown(statusText)}\n`;
+                        reply += `  Total: ${escapeMarkdown(order.currency_id)} ${escapeMarkdown(order.total_amount)}\n`;
+                        reply += `  Fecha: ${escapeMarkdown(new Date(order.date_created).toLocaleString())}\n\n`;
                     });
                 }
                 await sendTelegramMessage(chatId, reply);
@@ -303,10 +318,11 @@ app.post('/telegram-webhook', async (req, res) => {
                     reply = '|🔎| No hay preguntas pendientes de responder.';
                 } else {
                     questions.slice(0, 5).forEach(question => {
-                        reply += `* Pregunta ID: ${question.id}\n`;
-                        reply += `  Item ID: ${question.item_id}\n`;
-                        reply += `  Texto: "${question.text}"\n`;
-                        reply += `  Fecha: ${new Date(question.date_created).toLocaleString()}\n\n`;
+                        // Escapamos los datos dinámicos
+                        reply += `* Pregunta ID: ${escapeMarkdown(question.id)}\n`;
+                        reply += `  Item ID: ${escapeMarkdown(question.item_id)}\n`;
+                        reply += `  Texto: "${escapeMarkdown(question.text)}"\n`;
+                        reply += `  Fecha: ${escapeMarkdown(new Date(question.date_created).toLocaleString())}\n\n`;
                     });
                 }
                 await sendTelegramMessage(chatId, reply);
@@ -334,13 +350,14 @@ app.post('/telegram-webhook', async (req, res) => {
                 let reply = `|📦| **Información de ${itemsDetails.length} Productos Activos:**\n\n`;
 
                 itemsDetails.forEach(item => {
-                    reply += `**${item.title}**\n`;
-                    reply += `* ID: ${item.id}\n`;
-                    reply += `* Precio: ${item.currency_id} ${item.price}\n`;
-                    reply += `* Stock disponible: ${item.available_quantity}\n`;
-                    reply += `* Ventas totales: ${item.sold_quantity}\n`;
-                    reply += `* Estado: ${item.status}\n`;
-                    reply += `* Ver: ${item.permalink}\n\n`;
+                    // Escapamos los datos dinámicos
+                    reply += `**${escapeMarkdown(item.title)}**\n`;
+                    reply += `* ID: ${escapeMarkdown(item.id)}\n`;
+                    reply += `* Precio: ${escapeMarkdown(item.currency_id)} ${escapeMarkdown(item.price)}\n`;
+                    reply += `* Stock disponible: ${escapeMarkdown(item.available_quantity)}\n`;
+                    reply += `* Ventas totales: ${escapeMarkdown(item.sold_quantity)}\n`;
+                    reply += `* Estado: ${escapeMarkdown(item.status)}\n`;
+                    reply += `* Ver: ${escapeMarkdown(item.permalink)}\n\n`;
                 });
 
                 await sendTelegramMessage(chatId, reply);
