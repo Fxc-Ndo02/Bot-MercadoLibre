@@ -1,37 +1,41 @@
+// utils/telegram.js
+
 const axios = require('axios');
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-// Función para escapar texto para Markdown V2 de Telegram.
-function escapeMarkdown(text) {
-    if (text === null || typeof text === 'undefined') {
-        return '';
+// Función de utilidad para escapar caracteres especiales de MarkdownV2
+const escapeMarkdown = (text) => {
+    if (typeof text !== 'string') {
+        text = String(text);
     }
-    // Escapa todos los caracteres reservados en MarkdownV2.
-    return text.toString().replace(/[_*[\]()~`>#+-=|{}.!]/g, '\\$&');
-}
+    // Escapa los caracteres reservados en MarkdownV2
+    return text.replace(/([_*\[\]\(\)~`>#\+\-=\|\{\}\.!])/g, '\\$1');
+};
 
-// Función mejorada para enviar mensajes a Telegram
-async function sendTelegramMessage(chatId, text) {
-    if (!TELEGRAM_BOT_TOKEN) {
-        console.error('|❌| Error: TELEGRAM_BOT_TOKEN no está configurado.');
+// Función para enviar mensajes a Telegram con MarkdownV2 y opciones (incluidos botones)
+const sendTelegramMessage = async (chatId, text, options = {}) => {
+    if (!process.env.TELEGRAM_BOT_TOKEN) {
+        console.error('|❌| TELEGRAM_BOT_TOKEN no está configurado en .env');
         return;
     }
-    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+
+    const telegramApi = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`;
+
+    const payload = {
+        chat_id: chatId,
+        text: text,
+        parse_mode: 'MarkdownV2',
+        // Esto permite pasar reply_markup para botones
+        ...options 
+    };
+
     try {
-        await axios.post(url, {
-            chat_id: chatId,
-            text: text,
-            parse_mode: 'MarkdownV2',
-        });
+        await axios.post(telegramApi, payload);
         console.log('|☑️| Mensaje de Telegram enviado con éxito.');
     } catch (error) {
         console.error('|❌| Error al enviar mensaje a Telegram:', error.response ? JSON.stringify(error.response.data) : error.message);
-        // Si el error es un problema de Markdown, lo registramos.
-        if (error.response && error.response.data && error.response.data.description.includes("Bad Request: can't parse entities")) {
-            console.error('   |⚠️| Error de formato Markdown. Verifica los caracteres escapados.');
-        }
+        console.error('   |⚠️| Error de formato Markdown. Verifica los caracteres escapados.');
     }
-}
+};
 
 module.exports = {
     escapeMarkdown,
