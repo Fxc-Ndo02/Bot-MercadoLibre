@@ -1,4 +1,4 @@
-// index.js
+// index.js (Versión final con formato mejorado y links corregidos)
 
 require('dotenv').config();
 const express = require('express');
@@ -192,8 +192,8 @@ app.post('/telegram-webhook', async (req, res) => {
                 const body = item.body;
                 const productIndex = index + 1; // Enumeración a partir de 1
 
-                // Enumeración y título
-                reply += `*${productIndex}.* *${escapeMarkdown(body.title)}*\n`;
+                // Enumeración (se escapa el punto) y título
+                reply += `*${productIndex}\\.* *${escapeMarkdown(body.title)}*\n`;
                 // Añadimos el ID del producto
                 reply += `   *\\|ID\\|:* \`${escapeMarkdown(body.id)}\`\n`; 
                 reply += `   *\\|Precio\\|:* ${escapeMarkdown(body.currency_id)} ${escapeMarkdown(body.price)}\n`;
