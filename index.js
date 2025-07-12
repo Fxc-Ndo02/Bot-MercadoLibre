@@ -27,7 +27,7 @@ async function sendTelegramMessage(chatId, text) {
       chat_id: chatId,
       text: text,
     });
-    console.log('|✅| Notificación de Telegram enviada con éxito.');
+    console.log('|☑️| Notificación de Telegram enviada con éxito.');
   } catch (error) {
     // Manejar errores de Axios, por ejemplo, si el chat_id es inválido o el bot está bloqueado
     console.error('|❌| Error al enviar mensaje a Telegram:', error.response ? error.response.data : error.message);
@@ -68,10 +68,10 @@ app.get('/callback', async (req, res) => {
 
     if (data.access_token) {
       if (TELEGRAM_CHAT_ID) {
-          await sendTelegramMessage(TELEGRAM_CHAT_ID, '|✅| *¡CosmeticaSPA-BOT se ha vinculado correctamente!*');
+          await sendTelegramMessage(TELEGRAM_CHAT_ID, '|☑️| ¡CosmeticaSPA-BOT se ha vinculado correctamente!');
       }
       
-      console.log('|✅| ¡Autenticado correctamente!');
+      console.log('|☑️| ¡Autenticado correctamente!');
       fs.writeFileSync('tokens.json', JSON.stringify(data, null, 2));
       console.log('|💾| Tokens guardados en tokens.json');
       
@@ -101,9 +101,9 @@ app.post('/webhook', async (req, res) => {
     let message = 'Nueva notificación de Mercado Libre recibida.\n';
     
     if (notification.topic === 'questions') {
-      message += `|💬| *¡Nueva Pregunta recibida!*\nRecurso: ${notification.resource}`;
+      message += `|💬| ¡Nueva Pregunta recibida!\nRecurso: ${notification.resource}`;
     } else if (notification.topic === 'orders_v2') {
-      message += `|🛒| *¡Nueva Venta!*\nRecurso: ${notification.resource}`;
+      message += `|🛒| ¡Nueva Venta!\nRecurso: ${notification.resource}`;
     } else {
       message += `Tipo: ${notification.topic}`;
       message += `\nRecurso: ${notification.resource}`;
@@ -136,15 +136,15 @@ app.post('/telegram-webhook', async (req, res) => {
 
         // Manejar el comando /status
         if (text === '/status') {
-            const statusMessage = `|🤖👋| *CosmeticaSPA-BOT* esta activo\n*-Última verificación:* ${new Date().toLocaleString('es-AR')}`;
+            const statusMessage = `|🤖👋| CosmeticaSPA-BOT esta activo\n-Última verificación: ${new Date().toLocaleString('es-AR')}`;
             await sendTelegramMessage(chatId, statusMessage);
 
         // Manejar el comando /menu o /help
         } else if (text === '/menu' || text === '/help') {
             const menuMessage = `
-|🛠️| *Comandos Disponibles:*
-*/status* - Verifica si el bot está activo en Render.com.
-*/menu* - Muestra este menú de comandos.
+|🛠️| Comandos Disponibles:
+/status - Verifica si el bot está activo en Render.com.
+/menu - Muestra este menú de comandos.
 `;
             // Nota: Aquí enviamos el mensaje con formato Markdown básico si es necesario.
             await sendTelegramMessage(chatId, menuMessage);
