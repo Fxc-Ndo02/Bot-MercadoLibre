@@ -1,85 +1,18 @@
-// index.js (Versión final con formato mejorado y links corregidos)
+// index.js
 
 require('dotenv').config();
 const express = require('express');
-const fs = require('fs');
+const { escapeMarkdown, sendTelegramMessage } = require('./utils/telegram');
+const { ensureAccessToken, answerQuestion } = require('./utils/mercadolibre');
+const { userContexts } = require('./utils/state');
 const axios = require('axios');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Credenciales de Telegram
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-
-// --- FUNCIONES AUXILIARES ---
-
-// Función para escapar texto para Markdown de Telegram, sin afectar los links.
-function escapeMarkdown(text) {
-    if (text === null || typeof text === 'undefined') {
-        return '';
-    }
-    // Escapa solo los caracteres que Telegram necesita para evitar errores de formato.
-    // Aunque el escapeMarkdown incluye '|', las strings estáticas deben ser escapadas manualmente si se usa MarkdownV2.
-    return text.toString().replace(/[_*[\]()~`>#+-=|{}.!]/g, '\\$&');
-}
-
-// Función mejorada para enviar mensajes a Telegram
-async function sendTelegramMessage(chatId, text) {
-    if (!TELEGRAM_BOT_TOKEN) {
-        console.error('|❌| Error: TELEGRAM_BOT_TOKEN no está configurado.');
-        return;
-    }
-    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-    try {
-        await axios.post(url, {
-            chat_id: chatId,
-            text: text,
-            // Usamos 'MarkdownV2' que es más estricto pero más potente.
-            parse_mode: 'MarkdownV2',
-        });
-        console.log('|☑️| Mensaje de Telegram enviado con éxito.');
-    } catch (error) {
-        console.error('|❌| Error al enviar mensaje a Telegram:', error.response ? JSON.stringify(error.response.data) : error.message);
-    }
-}
-
-// --- LÓGICA DE TOKEN DE MERCADO LIBRE ---
-
-async function refreshAccessToken(refreshToken) {
-    console.log('|🔄| Refrescando el token de acceso...');
-    try {
-        const response = await axios.post('https://api.mercadolibre.com/oauth/token', new URLSearchParams({
-            grant_type: 'refresh_token',
-            client_id: process.env.CLIENT_ID,
-            client_secret: process.env.CLIENT_SECRET,
-            refresh_token: refreshToken,
-        }));
-        const data = response.data;
-        data.expires_at = Date.now() + (data.expires_in * 1000);
-        fs.writeFileSync('tokens.json', JSON.stringify(data, null, 2));
-        console.log('|💾| Token refrescado y guardado.');
-        return JSON.parse(fs.readFileSync('tokens.json', 'utf8'));
-    } catch (error) {
-        console.error('|❌| Error al refrescar el token:', error.message);
-        throw new Error('No se pudo refrescar el token.');
-    }
-}
-
-async function ensureAccessToken() {
-    if (!fs.existsSync('tokens.json')) {
-        console.log('|⚠️| No existe tokens.json. Se requiere autenticación.');
-        return null;
-    }
-    const tokens = JSON.parse(fs.readFileSync('tokens.json', 'utf8'));
-    if (Date.now() >= tokens.expires_at - 60000) { // Margen de 1 minuto
-        return await refreshAccessToken(tokens.refresh_token);
-    }
-    return tokens;
-}
-
-// --- RUTAS DEL SERVIDOR EXPRESS ---
-
 app.use(express.json());
+
+// --- Rutas de Autenticación de Mercado Libre ---
 
 // 1. Ruta de Autenticación
 app.get('/', (req, res) => {
@@ -93,6 +26,7 @@ app.get('/callback', async (req, res) => {
     const { code } = req.query;
     if (!code) return res.status(400).send('Error: Falta el código de autorización.');
     try {
+        // La lógica de obtener y guardar tokens se maneja internamente en ensureAccessToken al pasar el código
         const response = await axios.post('https://api.mercadolibre.com/oauth/token', new URLSearchParams({
             grant_type: 'authorization_code',
             client_id: process.env.CLIENT_ID,
@@ -100,12 +34,11 @@ app.get('/callback', async (req, res) => {
             code,
             redirect_uri: process.env.REDIRECT_URI,
         }));
+        
         const data = response.data;
         data.expires_at = Date.now() + (data.expires_in * 1000);
         fs.writeFileSync('tokens.json', JSON.stringify(data, null, 2));
-        
-        // Notificar al chat principal si está configurado
-        // Modificado: Escapando los '|' del emoji
+
         if (process.env.TELEGRAM_CHAT_ID) {
             await sendTelegramMessage(process.env.TELEGRAM_CHAT_ID, '\\|✅\\| ¡CosmeticaSPA\\-BOT vinculado correctamente a Mercado Libre\\!');
         }
@@ -117,14 +50,56 @@ app.get('/callback', async (req, res) => {
     }
 });
 
-// 3. Webhook para notificaciones de Mercado Libre (opcional)
-app.post('/webhook', (req, res) => {
-    console.log('|📩| Notificación de ML recibida:', req.body);
-    res.sendStatus(200);
+// --- Webhooks de Mercado Libre (Notificaciones en Tiempo Real) ---
+
+app.post('/webhook', async (req, res) => {
+    const notification = req.body;
+    console.log('|📩| Notificación de ML recibida:', notification.topic);
+
+    const tokens = await ensureAccessToken();
+    if (!tokens) {
+        console.error('|⚠️| Notificación recibida, pero no hay token de ML para procesarla.');
+        return res.sendStatus(200);
+    }
+
+    try {
+        const authHeaders = { 'Authorization': `Bearer ${tokens.access_token}` };
+
+        if (notification.topic === 'questions') {
+            // Notificación de nueva pregunta
+            const questionId = notification.resource.split('/').pop();
+            const questionResponse = await axios.get(`https://api.mercadolibre.com/questions/${questionId}`, { headers: authHeaders });
+            const question = questionResponse.data;
+
+            const message = `*\\|❓\\| Nueva pregunta recibida:*\\\n\\\n` +
+                            `*Producto:* ${escapeMarkdown(question.item_id)}\\\n` +
+                            `*Pregunta:* _"${escapeMarkdown(question.text)}"_\\\n\\\n` +
+                            `Puedes responder esta pregunta directamente usando: \`/responder ${questionId} <tu respuesta>\``;
+            
+            await sendTelegramMessage(process.env.TELEGRAM_CHAT_ID, message);
+
+        } else if (notification.topic === 'orders_v2') {
+            // Notificación de nueva venta
+            const orderId = notification.resource.split('/').pop();
+            const orderResponse = await axios.get(`https://api.mercadolibre.com/orders/${orderId}`, { headers: authHeaders });
+            const order = orderResponse.data;
+
+            const message = `*\\|🛒\\| ¡Nueva venta recibida!*\\\n\\\n` +
+                            `*ID de venta:* \`${escapeMarkdown(order.id)}\`\\\n` +
+                            `*Total:* ${escapeMarkdown(order.currency_id)} ${escapeMarkdown(order.total_amount)}\\\n` +
+                            `*Comprador:* ${escapeMarkdown(order.buyer.nickname)}\\\n\\\n` +
+                            `*Estado:* ${escapeMarkdown(order.status)}`;
+
+            await sendTelegramMessage(process.env.TELEGRAM_CHAT_ID, message);
+        }
+    } catch (error) {
+        console.error('|❌| Error procesando webhook:', error.message);
+    }
+
+    res.sendStatus(200); // Responder OK siempre para evitar reintentos de ML
 });
 
-
-// --- WEBHOOK DE TELEGRAM Y MANEJO DE COMANDOS ---
+// --- Webhook de Telegram y Manejo de Comandos ---
 
 app.post('/telegram-webhook', async (req, res) => {
     const message = req.body.message;
@@ -136,9 +111,24 @@ app.post('/telegram-webhook', async (req, res) => {
     const chatId = message.chat.id;
     console.log(`|💬| Comando [${text}] recibido del chat [${chatId}]`);
 
-    // --- Comandos públicos ---
+    // --- Lógica de Respuesta a Preguntas (contexto) ---
+    // Si el usuario está en modo "responder" y no es un comando, asumimos que es la respuesta a la pregunta anterior.
+    if (userContexts[chatId] && userContexts[chatId].mode === 'answering' && !text.startsWith('/')) {
+        try {
+            await answerQuestion(userContexts[chatId].questionId, text);
+            await sendTelegramMessage(chatId, `\\|✅\\| Tu respuesta ha sido enviada a Mercado Libre\\.`);
+            // Limpiar contexto
+            delete userContexts[chatId];
+        } catch (error) {
+            await sendTelegramMessage(chatId, `\\|❌\\| Error al enviar la respuesta: ${escapeMarkdown(error.message)}\\.`);
+        }
+        return res.sendStatus(200);
+    }
+
+    // --- Manejo de Comandos ---
+    
+    // Comandos públicos
     if (text === '/start' || text === '/menu' || text === '/help') {
-        // Modificado: Escapando los '|' en el string de menu para MarkdownV2
         const menu = `*\\|👋\\|*\\ Estos son los comandos disponibles:\\\n\\\n` +
                      `*\\|/productinfo\\|* \\- Muestra informacion de tus productos\\.\\\n` +
                      `*\\|/checksales\\|* \\- Revisa las últimas ventas concretadas\\.\\\n` +
@@ -149,16 +139,14 @@ app.post('/telegram-webhook', async (req, res) => {
     }
     
     if (text === '/status') {
-        // Modificado: Escapando los '|' del emoji
         await sendTelegramMessage(chatId, '\\|✅\\| CosmeticaSPA\\-BOT está activo y funcionando correctamente\\.');
         return res.sendStatus(200);
     }
 
-    // --- Comandos privados (requieren token) ---
+    // Comandos privados (requieren token)
     try {
         const tokens = await ensureAccessToken();
         if (!tokens) {
-            // Modificado: Escapando los '|' del emoji
             await sendTelegramMessage(chatId, '\\|⚠️\\| *Error de autenticación*\\.\\\nNecesitás vincular tu cuenta de Mercado Libre primero\\. Visitá la página principal de tu bot para hacerlo\\.');
             return res.sendStatus(200);
         }
@@ -174,7 +162,6 @@ app.post('/telegram-webhook', async (req, res) => {
 
             const itemIds = itemsResponse.data.results;
             if (itemIds.length === 0) {
-                // Modificado: Escapando los '|' del emoji
                 await sendTelegramMessage(chatId, '\\|📦\\| No tenés publicaciones activas en este momento\\.');
                 return res.sendStatus(200);
             }
@@ -184,21 +171,17 @@ app.post('/telegram-webhook', async (req, res) => {
                 params: { ids: itemIds.join(','), attributes: 'id,title,price,currency_id,available_quantity,sold_quantity,permalink' }
             });
 
-            // Modificado: Escapando los '|' del emoji en el título
             let reply = `*\\|📦\\|* Información de tus ${detailsResponse.data.length} productos más recientes:\\\n\\\n`;
             
-            // Modificado: Usando forEach con 'index' para enumerar los productos
             detailsResponse.data.forEach((item, index) => {
                 const body = item.body;
                 const productIndex = index + 1; // Enumeración a partir de 1
 
-                // Enumeración (se escapa el punto) y título
                 reply += `*${productIndex}\\.* *${escapeMarkdown(body.title)}*\n`;
-                // Añadimos el ID del producto
                 reply += `   *\\|ID\\|:* \`${escapeMarkdown(body.id)}\`\n`; 
                 reply += `   *\\|Precio\\|:* ${escapeMarkdown(body.currency_id)} ${escapeMarkdown(body.price)}\n`;
                 reply += `   *\\|Stock\\|:* ${escapeMarkdown(body.available_quantity)} \\| *\\|Ventas\\|:* ${escapeMarkdown(body.sold_quantity)}\n`;
-                reply += `   *\\[[Ver Producto](${body.permalink})\\]*\n\n`; // Link funcional
+                reply += `   *\\[[Ver Producto](${body.permalink})\\]*\n\n`; 
             });
             await sendTelegramMessage(chatId, reply);
         }
@@ -212,13 +195,10 @@ app.post('/telegram-webhook', async (req, res) => {
             
             const orders = ordersResponse.data.results;
             if (orders.length === 0) {
-                // Modificado: Escapando los '|' del emoji
                 await sendTelegramMessage(chatId, '\\|✅\\| No tenes ventas recientes\\.');
             } else {
-                // Modificado: Escapando los '|' del emoji en el título
                 let reply = '*\\|🛒\\|* Últimas 5 ventas:\\\n\\\n';
                 orders.forEach(order => {
-                    // Modificado: Escapando los '|' de '|ID|', '|Total|', '|Fecha|'
                     reply += `*\\|ID\\|:* \`${escapeMarkdown(order.id)}\`\n`;
                     reply += `   *\\|Total\\|:* ${escapeMarkdown(order.currency_id)} ${escapeMarkdown(order.total_amount)}\n`;
                     reply += `   *\\|Fecha\\|:* ${escapeMarkdown(new Date(order.date_created).toLocaleString('es-AR'))}\n\n`;
@@ -227,7 +207,7 @@ app.post('/telegram-webhook', async (req, res) => {
             }
         }
 
-        // --- Comando /checkquestions ---
+        // --- Comando /checkquestions (con opción para responder) ---
         else if (text === '/checkquestions') {
             const questionsResponse = await axios.get('https://api.mercadolibre.com/questions/search', {
                 headers: authHeaders,
@@ -236,17 +216,38 @@ app.post('/telegram-webhook', async (req, res) => {
             
             const questions = questionsResponse.data.questions;
             if (questions.length === 0) {
-                // Modificado: Escapando los '|' del emoji
                 await sendTelegramMessage(chatId, '\\|✅\\| No tenés preguntas pendientes para responder\\.');
             } else {
-                // Modificado: Escapando los '|' del emoji en el título
                 let reply = '*\\|💬\\|* Preguntas sin responder:\\\n\\\n';
                 questions.forEach(q => {
+                    reply += `*ID de Pregunta:* \`${escapeMarkdown(q.id)}\`\\\n`;
                     reply += `*En el producto:* \`${escapeMarkdown(q.item_id)}\`\n`;
                     reply += `   \\- _"${escapeMarkdown(q.text)}"_\n\n`;
+                    // Añadimos el comando para iniciar la respuesta
+                    reply += `*Para responder:* \`/responder ${q.id}\`\n\n`;
                 });
                 await sendTelegramMessage(chatId, reply);
             }
+        }
+
+        // --- Comando /responder <ID> (inicia el modo de respuesta) ---
+        else if (text.startsWith('/responder')) {
+            const parts = text.split(' ');
+            const questionId = parts[1];
+
+            if (!questionId) {
+                await sendTelegramMessage(chatId, '\\|⚠️\\| Usá el formato: `/responder <ID_Pregunta>`');
+                return res.sendStatus(200);
+            }
+
+            // Establecer el contexto del usuario en "modo de respuesta"
+            userContexts[chatId] = {
+                mode: 'answering',
+                questionId: questionId,
+            };
+
+            await sendTelegramMessage(chatId, `\\|✍️\\| Entendido\\. Respondiendo a la pregunta \`${escapeMarkdown(questionId)}\`\\.\\\nAhora, escribí tu respuesta y enviala\\.`);
+            return res.sendStatus(200);
         }
 
         else {
@@ -256,7 +257,6 @@ app.post('/telegram-webhook', async (req, res) => {
 
     } catch (error) {
         console.error('|❌| Error procesando comando:', error.response ? JSON.stringify(error.response.data) : error.message);
-        // Modificado: Escapando los '|' del emoji
         await sendTelegramMessage(chatId, '\\|❌\\| Hubo un error al procesar tu solicitud\\. Por favor, revisá los logs del servidor\\.');
     }
     
