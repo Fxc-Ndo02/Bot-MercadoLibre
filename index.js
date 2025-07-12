@@ -78,7 +78,23 @@ app.post('/webhook', async (req, res) => {
                             `*Pregunta:* _"${escapeMarkdown(question.text)}"_\\\n\\\n` +
                             `Puedes responder esta pregunta directamente usando: \`/responder ${questionId}\``;
             
-            await sendTelegramMessage(process.env.TELEGRAM_CHAT_ID, message);
+            // --- AGREGAR BOTÓN INLINE ---
+            const inlineKeyboard = {
+                inline_keyboard: [
+                    [
+                        { 
+                            text: "Responder pregunta", 
+                            // callback_data inicia el modo de respuesta en el webhook de Telegram
+                            callback_data: `answer_${questionId}` 
+                        }
+                    ]
+                ]
+            };
+
+            await sendTelegramMessage(process.env.TELEGRAM_CHAT_ID, message, {
+                reply_markup: inlineKeyboard
+            });
+            // -----------------------------
 
         } else if (notification.topic === 'orders_v2') {
             // Notificación de nueva venta
@@ -98,21 +114,59 @@ app.post('/webhook', async (req, res) => {
         console.error('|❌| Error procesando webhook:', error.message);
     }
 
-    res.sendStatus(200); // Responder OK siempre para evitar reintentos de ML
+    res.sendStatus(200);
 });
 
 // --- Webhook de Telegram y Manejo de Comandos ---
 
 app.post('/telegram-webhook', async (req, res) => {
     const message = req.body.message;
-    if (!message || !message.text) {
+    const callbackQuery = req.body.callback_query; // Capturar la consulta de callback (botón presionado)
+
+    let chatId;
+    let text;
+    let queryId;
+
+    if (message && message.text) {
+        // Manejo de mensaje de texto normal
+        chatId = message.chat.id;
+        text = message.text;
+        console.log(`|💬| Comando [${text}] recibido del chat [${chatId}]`);
+    } else if (callbackQuery && callbackQuery.data) {
+        // Manejo de botón presionado (callback_query)
+        chatId = callbackQuery.message.chat.id;
+        text = callbackQuery.data; // El dato del botón (ej. "answer_12345")
+        queryId = callbackQuery.id; // ID para responder al callback
+        console.log(`|🔘| Botón presionado con callback_data: [${text}] del chat [${chatId}]`);
+
+        // Responder al callback_query para quitar el reloj de carga en Telegram
+        try {
+            await axios.post(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
+                callback_query_id: queryId
+            });
+        } catch (error) {
+            console.error('|❌| Error al responder callbackQuery:', error.message);
+        }
+    } else {
         return res.sendStatus(200);
     }
 
-    const text = message.text;
-    const chatId = message.chat.id;
-    console.log(`|💬| Comando [${text}] recibido del chat [${chatId}]`);
+    // --- Procesamiento de Lógica (incluyendo callbacks) ---
+    
+    // Si el callback es para responder una pregunta (ej: 'answer_12345')
+    if (text.startsWith('answer_')) {
+        const questionId = text.replace('answer_', '');
+        
+        // Simular el inicio del comando /responder
+        userContexts[chatId] = {
+            mode: 'answering',
+            questionId: questionId,
+        };
 
+        await sendTelegramMessage(chatId, `\\|✍️\\| Entendido\\. Respondiendo a la pregunta \`${escapeMarkdown(questionId)}\`\\.\\\nAhora, escribí tu respuesta y enviala\\.`);
+        return res.sendStatus(200);
+    }
+    
     // --- Lógica de Respuesta a Preguntas (contexto) ---
     // Si el usuario está en modo "responder" y no es un comando, asumimos que es la respuesta a la pregunta anterior.
     if (userContexts[chatId] && userContexts[chatId].mode === 'answering' && !text.startsWith('/')) {
@@ -131,11 +185,12 @@ app.post('/telegram-webhook', async (req, res) => {
     
     // Comandos públicos
     if (text === '/start' || text === '/menu' || text === '/help') {
+        // Se corrigió el menú para usar (ID) en lugar de <ID> para evitar errores de formato
         const menu = `*\\|👋\\|*\\ Estos son los comandos disponibles:\\\n\\\n` +
                      `*\\|/productinfo\\|* \\- Muestra informacion de tus productos\\.\\\n` +
                      `*\\|/checksales\\|* \\- Revisa las últimas ventas concretadas\\.\\\n` +
                      `*\\|/checkquestions\\|* \\- Muestra preguntas las preguntass pendientes\\.\\\n` +
-                     `*\\|/responder \\(ID\\)\\|* \\- Responde una pregunta específica por su ID\\.\\\n` + // <--- Se cambió <ID> por (ID) y se escaparon
+                     `*\\|/responder \\(ID\\)\\|* \\- Responde una pregunta específica por su ID\\.\\\n` + 
                      `*\\|/status\\|* \\- Verifica el estado de CosmeticaSPA\\-BOT\\.`;
         await sendTelegramMessage(chatId, menu);
         return res.sendStatus(200);
@@ -178,7 +233,7 @@ app.post('/telegram-webhook', async (req, res) => {
             
             detailsResponse.data.forEach((item, index) => {
                 const body = item.body;
-                const productIndex = index + 1; // Enumeración a partir de 1
+                const productIndex = index + 1;
 
                 reply += `*${productIndex}\\.* *${escapeMarkdown(body.title)}*\n`;
                 reply += `   *\\|ID\\|:* \`${escapeMarkdown(body.id)}\`\n`; 
@@ -239,7 +294,7 @@ app.post('/telegram-webhook', async (req, res) => {
             const questionId = parts[1];
 
             if (!questionId) {
-                await sendTelegramMessage(chatId, '\\|⚠️\\| Usá el formato: `/responder <ID_Pregunta>`');
+                await sendTelegramMessage(chatId, '\\|⚠️\\| Usá el formato: `/responder \\(ID_Pregunta\\)`');
                 return res.sendStatus(200);
             }
 
