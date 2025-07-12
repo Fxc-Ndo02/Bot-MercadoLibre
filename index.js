@@ -1,7 +1,8 @@
-// index.js 
+// index.js
 
 require('dotenv').config();
 const express = require('express');
+const fs = require('fs'); // <--- Añadido: Importar el módulo 'fs'
 const { escapeMarkdown, sendTelegramMessage } = require('./utils/telegram');
 const { ensureAccessToken, answerQuestion } = require('./utils/mercadolibre');
 const { userContexts } = require('./utils/state');
@@ -37,7 +38,9 @@ app.get('/callback', async (req, res) => {
         
         const data = response.data;
         data.expires_at = Date.now() + (data.expires_in * 1000);
-        fs.writeFileSync('tokens.json', JSON.stringify(data, null, 2));
+        
+        // Guardar el token inicial (requiere 'fs')
+        fs.writeFileSync('tokens.json', JSON.stringify(data, null, 2)); 
 
         if (process.env.TELEGRAM_CHAT_ID) {
             await sendTelegramMessage(process.env.TELEGRAM_CHAT_ID, '\\|✅\\| ¡CosmeticaSPA\\-BOT vinculado correctamente a Mercado Libre\\!');
