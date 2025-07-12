@@ -154,7 +154,8 @@ app.post('/telegram-webhook', async (req, res) => {
     try {
         const tokens = await ensureAccessToken();
         if (!tokens) {
-            await sendTelegramMessage(chatId, '⚠️ *Error de autenticación*\\.\nNecesitás vincular tu cuenta de Mercado Libre primero\\. Visitá la página principal de tu bot para hacerlo\\.');
+            // Modificado: Se añadió el formato |⚠️|
+            await sendTelegramMessage(chatId, '|⚠️| *Error de autenticación*\\.\nNecesitás vincular tu cuenta de Mercado Libre primero\\. Visitá la página principal de tu bot para hacerlo\\.');
             return res.sendStatus(200);
         }
 
@@ -183,9 +184,9 @@ app.post('/telegram-webhook', async (req, res) => {
                 const body = item.body;
                 // **CORRECCIÓN CLAVE**: El link no se escapa, el resto sí.
                 reply += `*${escapeMarkdown(body.title)}*\n`;
-                reply += `   \\*|Precio|:* ${escapeMarkdown(body.currency_id)} ${escapeMarkdown(body.price)}\n`;
-                reply += `   \\*|Stock|:* ${escapeMarkdown(body.available_quantity)} \\| *Ventas:* ${escapeMarkdown(body.sold_quantity)}\n`;
-                reply += `   \\[[Ver Producto](${body.permalink})\\]\n\n`; // Link funcional
+                reply += `   \\*|Precio|:* ${escapeMarkdown(body.currency_id)} ${escapeMarkdown(body.price)}\n`;
+                reply += `   \\*|Stock|:* ${escapeMarkdown(body.available_quantity)} \\| *Ventas:* ${escapeMarkdown(body.sold_quantity)}\n`;
+                reply += `   \\[[Ver Producto](${body.permalink})\\]\n\n`; // Link funcional
             });
             await sendTelegramMessage(chatId, reply);
         }
@@ -204,8 +205,8 @@ app.post('/telegram-webhook', async (req, res) => {
                 let reply = '*|🛒| Últimas 5 ventas:*\n\n';
                 orders.forEach(order => {
                     reply += `*|ID|:* \`${escapeMarkdown(order.id)}\`\n`;
-                    reply += `   \\*|Total|:* ${escapeMarkdown(order.currency_id)} ${escapeMarkdown(order.total_amount)}\n`;
-                    reply += `   \\*|Fecha|:* ${escapeMarkdown(new Date(order.date_created).toLocaleString('es-AR'))}\n\n`;
+                    reply += `   \\*|Total|:* ${escapeMarkdown(order.currency_id)} ${escapeMarkdown(order.total_amount)}\n`;
+                    reply += `   \\*|Fecha|:* ${escapeMarkdown(new Date(order.date_created).toLocaleString('es-AR'))}\n\n`;
                 });
                 await sendTelegramMessage(chatId, reply);
             }
@@ -225,7 +226,7 @@ app.post('/telegram-webhook', async (req, res) => {
                 let reply = '*|💬| Preguntas sin responder:*\n\n';
                 questions.forEach(q => {
                     reply += `*En el producto:* \`${escapeMarkdown(q.item_id)}\`\n`;
-                    reply += `   \\- _"${escapeMarkdown(q.text)}"_\n\n`;
+                    reply += `   \\- _"${escapeMarkdown(q.text)}"_\n\n`;
                 });
                 await sendTelegramMessage(chatId, reply);
             }
@@ -237,7 +238,8 @@ app.post('/telegram-webhook', async (req, res) => {
 
     } catch (error) {
         console.error('|❌| Error procesando comando:', error.response ? JSON.stringify(error.response.data) : error.message);
-        await sendTelegramMessage(chatId, '❌ Hubo un error al procesar tu solicitud\\. Por favor, revisá los logs del servidor\\.');
+        // Modificado: Se añadió el formato |❌|
+        await sendTelegramMessage(chatId, '|❌| Hubo un error al procesar tu solicitud\\. Por favor, revisá los logs del servidor\\.');
     }
     
     res.sendStatus(200);
@@ -245,5 +247,6 @@ app.post('/telegram-webhook', async (req, res) => {
 
 // --- INICIAR SERVIDOR ---
 app.listen(PORT, () => {
-    console.log(`🚀 Servidor funcionando en http://localhost:${PORT}`);
+    // Modificado: Se añadió el formato |🚀|
+    console.log(`|🚀| Servidor funcionando en http://localhost:${PORT}`);
 });
