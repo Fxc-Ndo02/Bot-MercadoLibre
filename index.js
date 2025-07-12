@@ -1,4 +1,4 @@
-// index.js (Versión final con formato mejorado y links corregidos)
+// index.js
 
 require('dotenv').config();
 const express = require('express');
@@ -186,14 +186,19 @@ app.post('/telegram-webhook', async (req, res) => {
 
             // Modificado: Escapando los '|' del emoji en el título
             let reply = `*\\|📦\\|* Información de tus ${detailsResponse.data.length} productos más recientes:\\\n\\\n`;
-            detailsResponse.data.forEach(item => {
+            
+            // Modificado: Usando forEach con 'index' para enumerar los productos
+            detailsResponse.data.forEach((item, index) => {
                 const body = item.body;
-                // **CORRECCIÓN CLAVE**: El link no se escapa, el resto sí.
-                reply += `*${escapeMarkdown(body.title)}*\n`;
-                // Modificado: Escapando los '|' de '|Precio|' y '|Stock|'
-                reply += `   \\*\\|Precio\\|:* ${escapeMarkdown(body.currency_id)} ${escapeMarkdown(body.price)}\n`;
-                reply += `   \\*\\|Stock\\|:* ${escapeMarkdown(body.available_quantity)} \\| *Ventas:* ${escapeMarkdown(body.sold_quantity)}\n`;
-                reply += `   \\[[Ver Producto](${body.permalink})\\]\n\n`; // Link funcional
+                const productIndex = index + 1; // Enumeración a partir de 1
+
+                // Enumeración y título
+                reply += `*${productIndex}.* *${escapeMarkdown(body.title)}*\n`;
+                // Añadimos el ID del producto
+                reply += `   *\\|ID\\|:* \`${escapeMarkdown(body.id)}\`\n`; 
+                reply += `   *\\|Precio\\|:* ${escapeMarkdown(body.currency_id)} ${escapeMarkdown(body.price)}\n`;
+                reply += `   *\\|Stock\\|:* ${escapeMarkdown(body.available_quantity)} \\| *\\|Ventas\\|:* ${escapeMarkdown(body.sold_quantity)}\n`;
+                reply += `   *\\[[Ver Producto](${body.permalink})\\]*\n\n`; // Link funcional
             });
             await sendTelegramMessage(chatId, reply);
         }
@@ -215,8 +220,8 @@ app.post('/telegram-webhook', async (req, res) => {
                 orders.forEach(order => {
                     // Modificado: Escapando los '|' de '|ID|', '|Total|', '|Fecha|'
                     reply += `*\\|ID\\|:* \`${escapeMarkdown(order.id)}\`\n`;
-                    reply += `   \\*\\|Total\\|:* ${escapeMarkdown(order.currency_id)} ${escapeMarkdown(order.total_amount)}\n`;
-                    reply += `   \\*\\|Fecha\\|:* ${escapeMarkdown(new Date(order.date_created).toLocaleString('es-AR'))}\n\n`;
+                    reply += `   *\\|Total\\|:* ${escapeMarkdown(order.currency_id)} ${escapeMarkdown(order.total_amount)}\n`;
+                    reply += `   *\\|Fecha\\|:* ${escapeMarkdown(new Date(order.date_created).toLocaleString('es-AR'))}\n\n`;
                 });
                 await sendTelegramMessage(chatId, reply);
             }
