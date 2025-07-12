@@ -4,7 +4,7 @@ require('dotenv').config();
 const express = require('express');
 const fs = require('fs');
 const { escapeMarkdown, sendTelegramMessage } = require('./utils/telegram');
-const { ensureAccessToken, answerQuestion } = require('./utils/mercadolibre');
+const { ensureAccessToken, answerQuestion, updateItemStock, getShipmentTracking } = require('./utils/mercadolibre');
 const { userContexts } = require('./utils/state');
 const axios = require('axios');
 
@@ -78,13 +78,12 @@ app.post('/webhook', async (req, res) => {
                             `*Pregunta:* _"${escapeMarkdown(question.text)}"_\\\n\\\n` +
                             `Puedes responder esta pregunta directamente usando: \`/responder ${questionId}\``;
             
-            // --- AGREGAR BOTÓN INLINE ---
+            // AGREGAR BOTÓN INLINE
             const inlineKeyboard = {
                 inline_keyboard: [
                     [
                         { 
                             text: "Responder pregunta", 
-                            // callback_data inicia el modo de respuesta en el webhook de Telegram
                             callback_data: `answer_${questionId}` 
                         }
                     ]
@@ -94,7 +93,6 @@ app.post('/webhook', async (req, res) => {
             await sendTelegramMessage(process.env.TELEGRAM_CHAT_ID, message, {
                 reply_markup: inlineKeyboard
             });
-            // -----------------------------
 
         } else if (notification.topic === 'orders_v2') {
             // Notificación de nueva venta
@@ -102,10 +100,18 @@ app.post('/webhook', async (req, res) => {
             const orderResponse = await axios.get(`https://api.mercadolibre.com/orders/${orderId}`, { headers: authHeaders });
             const order = orderResponse.data;
 
+            let shipmentMessage = '';
+            if (order.shipping && order.shipping.id) {
+                // Si existe un ID de envío, agregamos el comando para seguimiento
+                shipmentMessage = `*ID de Envío:* \`${escapeMarkdown(order.shipping.id)}\`\\\n` +
+                                  `*Seguimiento:* \`/checkshipment ${escapeMarkdown(order.shipping.id)}\`\n`;
+            }
+
             const message = `*\\|🛒\\| ¡Nueva venta recibida!*\\\n\\\n` +
                             `*ID de venta:* \`${escapeMarkdown(order.id)}\`\\\n` +
                             `*Total:* ${escapeMarkdown(order.currency_id)} ${escapeMarkdown(order.total_amount)}\\\n` +
                             `*Comprador:* ${escapeMarkdown(order.buyer.nickname)}\\\n\\\n` +
+                            `${shipmentMessage}` +
                             `*Estado:* ${escapeMarkdown(order.status)}`;
 
             await sendTelegramMessage(process.env.TELEGRAM_CHAT_ID, message);
@@ -114,14 +120,14 @@ app.post('/webhook', async (req, res) => {
         console.error('|❌| Error procesando webhook:', error.message);
     }
 
-    res.sendStatus(200);
+    res.sendStatus(200); 
 });
 
 // --- Webhook de Telegram y Manejo de Comandos ---
 
 app.post('/telegram-webhook', async (req, res) => {
     const message = req.body.message;
-    const callbackQuery = req.body.callback_query; // Capturar la consulta de callback (botón presionado)
+    const callbackQuery = req.body.callback_query; 
 
     let chatId;
     let text;
@@ -135,8 +141,8 @@ app.post('/telegram-webhook', async (req, res) => {
     } else if (callbackQuery && callbackQuery.data) {
         // Manejo de botón presionado (callback_query)
         chatId = callbackQuery.message.chat.id;
-        text = callbackQuery.data; // El dato del botón (ej. "answer_12345")
-        queryId = callbackQuery.id; // ID para responder al callback
+        text = callbackQuery.data; 
+        queryId = callbackQuery.id; 
         console.log(`|🔘| Botón presionado con callback_data: [${text}] del chat [${chatId}]`);
 
         // Responder al callback_query para quitar el reloj de carga en Telegram
@@ -157,7 +163,6 @@ app.post('/telegram-webhook', async (req, res) => {
     if (text.startsWith('answer_')) {
         const questionId = text.replace('answer_', '');
         
-        // Simular el inicio del comando /responder
         userContexts[chatId] = {
             mode: 'answering',
             questionId: questionId,
@@ -168,7 +173,6 @@ app.post('/telegram-webhook', async (req, res) => {
     }
     
     // --- Lógica de Respuesta a Preguntas (contexto) ---
-    // Si el usuario está en modo "responder" y no es un comando, asumimos que es la respuesta a la pregunta anterior.
     if (userContexts[chatId] && userContexts[chatId].mode === 'answering' && !text.startsWith('/')) {
         try {
             await answerQuestion(userContexts[chatId].questionId, text);
@@ -185,12 +189,14 @@ app.post('/telegram-webhook', async (req, res) => {
     
     // Comandos públicos
     if (text === '/start' || text === '/menu' || text === '/help') {
-        // Se corrigió el menú para usar (ID) en lugar de <ID> para evitar errores de formato
+        // Se agregó /setstock y /checkshipment al menú
         const menu = `*\\|👋\\|*\\ Estos son los comandos disponibles:\\\n\\\n` +
                      `*\\|/productinfo\\|* \\- Muestra informacion de tus productos\\.\\\n` +
                      `*\\|/checksales\\|* \\- Revisa las últimas ventas concretadas\\.\\\n` +
                      `*\\|/checkquestions\\|* \\- Muestra preguntas las preguntass pendientes\\.\\\n` +
                      `*\\|/responder \\(ID\\)\\|* \\- Responde una pregunta específica por su ID\\.\\\n` + 
+                     `*\\|/setstock \\(ID\\) \\(Cantidad\\)\\|* \\- Actualiza el stock de un producto\\.\\\n` +
+                     `*\\|/checkshipment \\(ID\\)\\|* \\- Muestra el estado de un envío\\.\\\n` +
                      `*\\|/status\\|* \\- Verifica el estado de CosmeticaSPA\\-BOT\\.`;
         await sendTelegramMessage(chatId, menu);
         return res.sendStatus(200);
@@ -211,11 +217,11 @@ app.post('/telegram-webhook', async (req, res) => {
 
         const authHeaders = { 'Authorization': `Bearer ${tokens.access_token}` };
 
-        // --- Comando /productinfo ---
+        // --- Comando /productinfo (MEJORADO CON IMAGEN) ---
         if (text === '/productinfo') {
             const itemsResponse = await axios.get(`https://api.mercadolibre.com/users/${tokens.user_id}/items/search`, {
                 headers: authHeaders,
-                params: { status: 'active', limit: 20 }
+                params: { status: 'active', limit: 5 } // Solo los primeros 5 para una respuesta rápida
             });
 
             const itemIds = itemsResponse.data.results;
@@ -226,7 +232,8 @@ app.post('/telegram-webhook', async (req, res) => {
 
             const detailsResponse = await axios.get(`https://api.mercadolibre.com/items`, {
                 headers: authHeaders,
-                params: { ids: itemIds.join(','), attributes: 'id,title,price,currency_id,available_quantity,sold_quantity,permalink' }
+                // Solicitamos la URL de la imagen principal (thumbnail)
+                params: { ids: itemIds.join(','), attributes: 'id,title,price,currency_id,available_quantity,sold_quantity,permalink,thumbnail' }
             });
 
             let reply = `*\\|📦\\|* Información de tus ${detailsResponse.data.length} productos más recientes:\\\n\\\n`;
@@ -239,7 +246,12 @@ app.post('/telegram-webhook', async (req, res) => {
                 reply += `   *\\|ID\\|:* \`${escapeMarkdown(body.id)}\`\n`; 
                 reply += `   *\\|Precio\\|:* ${escapeMarkdown(body.currency_id)} ${escapeMarkdown(body.price)}\n`;
                 reply += `   *\\|Stock\\|:* ${escapeMarkdown(body.available_quantity)} \\| *\\|Ventas\\|:* ${escapeMarkdown(body.sold_quantity)}\n`;
-                reply += `   *\\[[Ver Producto](${body.permalink})\\]*\n\n`; 
+
+                // Agregamos el enlace a la imagen si existe
+                if (body.thumbnail) {
+                    reply += `   *\\[Imagen](${body.thumbnail})\\]* \\| `;
+                }
+                reply += `*\\[[Ver Producto](${body.permalink})\\]*\n\n`; 
             });
             await sendTelegramMessage(chatId, reply);
         }
@@ -258,14 +270,21 @@ app.post('/telegram-webhook', async (req, res) => {
                 let reply = '*\\|🛒\\|* Últimas 5 ventas:\\\n\\\n';
                 orders.forEach(order => {
                     reply += `*\\|ID\\|:* \`${escapeMarkdown(order.id)}\`\n`;
-                    reply += `   *\\|Total\\|:* ${escapeMarkdown(order.currency_id)} ${escapeMarkdown(order.total_amount)}\n`;
-                    reply += `   *\\|Fecha\\|:* ${escapeMarkdown(new Date(order.date_created).toLocaleString('es-AR'))}\n\n`;
+                    reply += `   *\\|Total\\|:* ${escapeMarkdown(order.currency_id)} ${escapeMarkdown(order.total_amount)}\\n`;
+                    reply += `   *\\|Comprador\\|:* ${escapeMarkdown(order.buyer.nickname)}\\n`;
+                    reply += `   *\\|Fecha\\|:* ${escapeMarkdown(new Date(order.date_created).toLocaleString('es-AR'))}\\n`;
+                    
+                    // Si tiene ID de envío, lo incluimos
+                    if (order.shipping && order.shipping.id) {
+                         reply += `   *\\|Envío\\|:* \`/checkshipment ${escapeMarkdown(order.shipping.id)}\`\n`;
+                    }
+                    reply += `\n`;
                 });
                 await sendTelegramMessage(chatId, reply);
             }
         }
 
-        // --- Comando /checkquestions (con opción para responder) ---
+        // --- Comando /checkquestions ---
         else if (text === '/checkquestions') {
             const questionsResponse = await axios.get('https://api.mercadolibre.com/questions/search', {
                 headers: authHeaders,
@@ -281,7 +300,6 @@ app.post('/telegram-webhook', async (req, res) => {
                     reply += `*ID de Pregunta:* \`${escapeMarkdown(q.id)}\`\\\n`;
                     reply += `*En el producto:* \`${escapeMarkdown(q.item_id)}\`\n`;
                     reply += `   \\- _"${escapeMarkdown(q.text)}"_\n\n`;
-                    // Añadimos el comando para iniciar la respuesta
                     reply += `*Para responder:* \`/responder ${q.id}\`\n\n`;
                 });
                 await sendTelegramMessage(chatId, reply);
@@ -305,6 +323,60 @@ app.post('/telegram-webhook', async (req, res) => {
             };
 
             await sendTelegramMessage(chatId, `\\|✍️\\| Entendido\\. Respondiendo a la pregunta \`${escapeMarkdown(questionId)}\`\\.\\\nAhora, escribí tu respuesta y enviala\\.`);
+            return res.sendStatus(200);
+        }
+
+        // --- Comando /setstock <ID> <Cantidad> (NUEVA MEJORA) ---
+        else if (text.startsWith('/setstock')) {
+            const parts = text.split(' ');
+            const itemId = parts[1];
+            const newQuantity = parts[2];
+
+            if (!itemId || !newQuantity || isNaN(newQuantity)) {
+                await sendTelegramMessage(chatId, '\\|⚠️\\| Usá el formato correcto: `/setstock \\(ID_Producto\\) \\(Cantidad\\)`');
+                return res.sendStatus(200);
+            }
+
+            try {
+                // Llama a la función de utilidad para actualizar el stock
+                const result = await updateItemStock(itemId, newQuantity);
+                await sendTelegramMessage(chatId, `\\|✅\\| Stock de producto \`${escapeMarkdown(result.id)}\` actualizado a *${escapeMarkdown(result.available_quantity)}*\\.`);
+            } catch (error) {
+                console.error('|❌| Error al actualizar stock:', error.response ? JSON.stringify(error.response.data) : error.message);
+                await sendTelegramMessage(chatId, `\\|❌\\| Error al actualizar stock\\. Verifica el ID y el formato\\.`);
+            }
+            return res.sendStatus(200);
+        }
+
+        // --- Comando /checkshipment <ID> (NUEVA MEJORA) ---
+        else if (text.startsWith('/checkshipment')) {
+            const parts = text.split(' ');
+            const shipmentId = parts[1];
+
+            if (!shipmentId) {
+                await sendTelegramMessage(chatId, '\\|⚠️\\| Usá el formato: `/checkshipment \\(ID_Envío\\)`');
+                return res.sendStatus(200);
+            }
+
+            try {
+                // Llama a la función de utilidad para obtener el estado del envío
+                const shipment = await getShipmentTracking(shipmentId);
+
+                let reply = `*\\|🚚\\| Estado del envío \`${escapeMarkdown(shipment.id)}\`*\n\n` +
+                            `*Estado:* ${escapeMarkdown(shipment.status)}\n` +
+                            `*Subestado:* ${escapeMarkdown(shipment.substatus || 'N/A')}\n` +
+                            `*Ubicación actual:* ${escapeMarkdown(shipment.tracking_number ? shipment.tracking_number.location : 'N/A')}\n\n`;
+
+                if (shipment.tracking_url) {
+                    reply += `*\\[[Seguimiento completo](${shipment.tracking_url})\\]*`;
+                }
+
+                await sendTelegramMessage(chatId, reply);
+
+            } catch (error) {
+                console.error('|❌| Error al obtener envío:', error.response ? JSON.stringify(error.response.data) : error.message);
+                await sendTelegramMessage(chatId, `\\|❌\\| Error al obtener el estado del envío\\. Verifica el ID\\.`);
+            }
             return res.sendStatus(200);
         }
 
