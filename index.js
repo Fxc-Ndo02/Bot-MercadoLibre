@@ -217,12 +217,12 @@ app.post('/telegram-webhook', async (req, res) => {
 
         const authHeaders = { 'Authorization': `Bearer ${tokens.access_token}` };
 
-        // --- Comando /productinfo (SIN IMAGEN, FORMATO ANTERIOR RESTAURADO) ---
+        // --- Comando /productinfo (FORMATO MODIFICADO Y SIN LÍMITE DE PRODUCTOS) ---
         if (text === '/productinfo') {
+            // Se elimina el 'limit: 5' para obtener todos los productos activos (hasta el límite de la API, usualmente 50)
             const itemsResponse = await axios.get(`https://api.mercadolibre.com/users/${tokens.user_id}/items/search`, {
                 headers: authHeaders,
-                // QUITAMOS 'thumbnail' de los atributos solicitados
-                params: { status: 'active', limit: 5 } 
+                params: { status: 'active' } 
             });
 
             const itemIds = itemsResponse.data.results;
@@ -231,30 +231,34 @@ app.post('/telegram-webhook', async (req, res) => {
                 return res.sendStatus(200);
             }
 
-            // Solicitamos solo los atributos necesarios para el formato sin imagen
+            // Solicitamos los detalles de los productos encontrados
             const detailsResponse = await axios.get(`https://api.mercadolibre.com/items`, {
                 headers: authHeaders,
                 params: { ids: itemIds.join(','), attributes: 'id,title,price,currency_id,available_quantity,sold_quantity,permalink' }
             });
 
-            let reply = `*\\|📦\\|* Información de tus ${detailsResponse.data.length} productos más recientes:\\\n\\\n`;
+            // Usamos el conteo real de productos para el encabezado
+            let reply = `\\|📦\\| Información de tus ${detailsResponse.data.length} productos más recientes:\n\n`;
             
             detailsResponse.data.forEach((item, index) => {
                 const body = item.body;
                 const productIndex = index + 1;
 
-                reply += `*${productIndex}\\.* *${escapeMarkdown(body.title)}*\n`;
-                reply += `   *\\|ID\\|:* \`${escapeMarkdown(body.id)}\`\n`; 
-                reply += `   *\\|Precio\\|:* ${escapeMarkdown(body.currency_id)} ${escapeMarkdown(body.price)}\\n`;
-                reply += `   *\\|Stock\\|:* ${escapeMarkdown(body.available_quantity)} \\| *\\|Ventas\\|:* ${escapeMarkdown(body.sold_quantity)}\\n`;
+                // Formato sin negritas y sin indentación, escapando los |
+                reply += `${productIndex}. ${escapeMarkdown(body.title)}\n`;
+                reply += `\\|ID\\|: ${escapeMarkdown(body.id)}\n`; 
+                reply += `\\|Precio\\|: ${escapeMarkdown(body.currency_id)} ${escapeMarkdown(body.price)}\n`;
+                reply += `\\|Stock\\|: ${escapeMarkdown(body.available_quantity)}\n`;
+                reply += `\\|Ventas\\|: ${escapeMarkdown(body.sold_quantity)}\n`;
 
-                // Formato de enlace restaurado a la versión anterior
-                reply += `   *\\[[Ver Producto](${escapeMarkdown(body.permalink)})\\]*\n\n`; 
+                // Formato del enlace: [Ver Producto (URL)]
+                // Usamos escapeMarkdown en el URL para asegurar que sea válido en Telegram.
+                reply += `\\[Ver Producto\\](${escapeMarkdown(body.permalink)})\\n\\n`; 
             });
             await sendTelegramMessage(chatId, reply);
         }
 
-        // --- Comando /checksales ---
+        // --- Comando /checksales (FORMATO MODIFICADO) ---
         else if (text === '/checksales') {
             const ordersResponse = await axios.get('https://api.mercadolibre.com/orders/search', {
                 headers: authHeaders,
@@ -265,18 +269,23 @@ app.post('/telegram-webhook', async (req, res) => {
             if (orders.length === 0) {
                 await sendTelegramMessage(chatId, '\\|✅\\| No tenes ventas recientes\\.');
             } else {
-                let reply = '*\\|🛒\\|* Últimas 5 ventas:\\\n\\\n';
+                // El encabezado utiliza \\| para escapar los | en MarkdownV2
+                let reply = `\\|🛒\\| Últimas 5 ventas:\n\n`; 
+
                 orders.forEach(order => {
-                    reply += `*\\|ID\\|:* \`${escapeMarkdown(order.id)}\`\n`;
-                    reply += `   *\\|Total\\|:* ${escapeMarkdown(order.currency_id)} ${escapeMarkdown(order.total_amount)}\\n`;
-                    reply += `   *\\|Comprador\\|:* ${escapeMarkdown(order.buyer.nickname)}\\n`;
-                    reply += `   *\\|Fecha\\|:* ${escapeMarkdown(new Date(order.date_created).toLocaleString('es-AR'))}\\n`;
+                    // El formato de las líneas ahora utiliza \\| y no está en negrita
+                    reply += `\\|ID\\|: ${escapeMarkdown(order.id)}\n`;
+                    reply += `\\|Total\\|: ${escapeMarkdown(order.currency_id)} ${escapeMarkdown(order.total_amount)}\\n`;
+                    reply += `\\|Comprador\\|: ${escapeMarkdown(order.buyer.nickname)}\\n`;
+                    // Aseguramos que la fecha se muestre en formato local (Ej. 5/7/2025, 05:23:11)
+                    reply += `\\|Fecha\\|: ${escapeMarkdown(new Date(order.date_created).toLocaleString('es-AR'))}\\n`;
                     
-                    // Si tiene ID de envío, lo incluimos
+                    // Si tiene ID de envío, lo incluimos con el comando de seguimiento
                     if (order.shipping && order.shipping.id) {
-                         reply += `   *\\|Envío\\|:* \`/checkshipment ${escapeMarkdown(order.shipping.id)}\`\n`;
+                         // Formato: |Envío|: /checkshipment ID
+                         reply += `\\|Envío\\|: ${escapeMarkdown(`/checkshipment ${order.shipping.id}`)}\n`;
                     }
-                    reply += `\n`;
+                    reply += `\n`; // Línea vacía entre ventas
                 });
                 await sendTelegramMessage(chatId, reply);
             }
