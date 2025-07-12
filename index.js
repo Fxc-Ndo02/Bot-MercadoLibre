@@ -1,4 +1,4 @@
-// index.js (código completo y mejorado con función de Telegram)
+// index.js 
 
 require('dotenv').config();
 const express = require('express');
