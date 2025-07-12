@@ -244,21 +244,22 @@ app.post('/telegram-webhook', async (req, res) => {
                 const body = item.body;
                 const productIndex = index + 1;
 
-                // Formato sin negritas y sin indentación, escapando los |
-                reply += `${productIndex}. ${escapeMarkdown(body.title)}\n`;
+                // Formato sin negritas y sin indentación.
+                // IMPORTANTE: Se agrega \\. para escapar el punto después del número de lista.
+                reply += `${productIndex}\\. ${escapeMarkdown(body.title)}\n`;
                 reply += `\\|ID\\|: ${escapeMarkdown(body.id)}\n`; 
                 reply += `\\|Precio\\|: ${escapeMarkdown(body.currency_id)} ${escapeMarkdown(body.price)}\n`;
                 reply += `\\|Stock\\|: ${escapeMarkdown(body.available_quantity)}\n`;
                 reply += `\\|Ventas\\|: ${escapeMarkdown(body.sold_quantity)}\n`;
 
-                // Formato del enlace: [Ver Producto (URL)]
-                // Usamos escapeMarkdown en el URL para asegurar que sea válido en Telegram.
-                reply += `\\[Ver Producto\\](${escapeMarkdown(body.permalink)})\\n\\n`; 
+                // Formato del enlace: [Ver Producto](URL)
+                // Se usa escapeMarkdown en el URL para asegurar que sea válido.
+                reply += `\\[Ver Producto\\](${escapeMarkdown(body.permalink)})\n\n`; 
             });
             await sendTelegramMessage(chatId, reply);
         }
 
-        // --- Comando /checksales (FORMATO MODIFICADO) ---
+        // --- Comando /checksales (FORMATO CORREGIDO Y MEJORADO) ---
         else if (text === '/checksales') {
             const ordersResponse = await axios.get('https://api.mercadolibre.com/orders/search', {
                 headers: authHeaders,
@@ -273,12 +274,26 @@ app.post('/telegram-webhook', async (req, res) => {
                 let reply = `\\|🛒\\| Últimas 5 ventas:\n\n`; 
 
                 orders.forEach(order => {
-                    // El formato de las líneas ahora utiliza \\| y no está en negrita
+                    // Formato de precio con formato de moneda (ARS $XX.XXX,00)
+                    const formattedPrice = new Intl.NumberFormat('es-AR', { style: 'currency', currency: order.currency_id }).format(order.total_amount);
+
+                    // Formato de fecha y hora: 05/07/2025 / 05:23:11
+                    const orderDate = new Date(order.date_created);
+                    const formattedDate = new Intl.DateTimeFormat('es-AR', { 
+                        day: '2-digit', 
+                        month: '2-digit', 
+                        year: 'numeric', 
+                        hour: '2-digit', 
+                        minute: '2-digit', 
+                        second: '2-digit',
+                        hour12: false // Formato 24h
+                    }).format(orderDate).replace(', ', ' / '); // Reemplazar la coma por " / " si existe
+
+                    // IMPORTANTE: Eliminamos \\ antes de \n para que se genere un salto de línea real.
                     reply += `\\|ID\\|: ${escapeMarkdown(order.id)}\n`;
-                    reply += `\\|Total\\|: ${escapeMarkdown(order.currency_id)} ${escapeMarkdown(order.total_amount)}\\n`;
-                    reply += `\\|Comprador\\|: ${escapeMarkdown(order.buyer.nickname)}\\n`;
-                    // Aseguramos que la fecha se muestre en formato local (Ej. 5/7/2025, 05:23:11)
-                    reply += `\\|Fecha\\|: ${escapeMarkdown(new Date(order.date_created).toLocaleString('es-AR'))}\\n`;
+                    reply += `\\|Total\\|: ${escapeMarkdown(formattedPrice)}\n`;
+                    reply += `\\|Comprador\\|: ${escapeMarkdown(order.buyer.nickname)}\n`;
+                    reply += `\\|Fecha\\|: ${escapeMarkdown(formattedDate)}\n`;
                     
                     // Si tiene ID de envío, lo incluimos con el comando de seguimiento
                     if (order.shipping && order.shipping.id) {
