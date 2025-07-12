@@ -244,15 +244,15 @@ app.post('/telegram-webhook', async (req, res) => {
                 const body = item.body;
                 const productIndex = index + 1;
 
-                // Se agrega \\. para escapar el punto después del número de lista y evitar el error de Markdown V2
+                // Se agrega \\. para escapar el punto después del número de lista 
                 reply += `${productIndex}\\. ${escapeMarkdown(body.title)}\n`;
                 reply += `\\|ID\\|: ${escapeMarkdown(body.id)}\n`; 
                 reply += `\\|Precio\\|: ${escapeMarkdown(body.currency_id)} ${escapeMarkdown(body.price)}\n`;
                 reply += `\\|Stock\\|: ${escapeMarkdown(body.available_quantity)}\n`;
                 reply += `\\|Ventas\\|: ${escapeMarkdown(body.sold_quantity)}\n`;
 
-                // Se utiliza la sintaxis de enlace de Markdown V2 estándar [Texto](URL)
-                reply += `\\[Ver Producto\\](${escapeMarkdown(body.permalink)})\n\n`; 
+                // **Corregido:** Se escapa el enlace y los paréntesis para evitar errores de Markdown V2
+                reply += `\\[Ver Producto\\]\\(${escapeMarkdown(body.permalink)}\\)\n\n`; 
             });
             await sendTelegramMessage(chatId, reply);
         }
@@ -286,7 +286,7 @@ app.post('/telegram-webhook', async (req, res) => {
                         hour12: false
                     }).format(orderDate).replace(/, /g, ' / ');
 
-                    // Se eliminan los escapes innecesarios de las \n para que funcionen los saltos de línea
+                    // Se usan \n para los saltos de línea reales
                     reply += `\\|ID\\|: ${escapeMarkdown(order.id)}\n`;
                     reply += `\\|Total\\|: ${escapeMarkdown(formattedPrice)}\n`;
                     reply += `\\|Comprador\\|: ${escapeMarkdown(order.buyer.nickname)}\n`;
