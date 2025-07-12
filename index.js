@@ -217,7 +217,7 @@ app.post('/telegram-webhook', async (req, res) => {
 
         const authHeaders = { 'Authorization': `Bearer ${tokens.access_token}` };
 
-        // --- Comando /productinfo (MEJORADO CON IMAGEN) ---
+        // --- Comando /productinfo (MEJORADO Y CORREGIDO) ---
         if (text === '/productinfo') {
             const itemsResponse = await axios.get(`https://api.mercadolibre.com/users/${tokens.user_id}/items/search`, {
                 headers: authHeaders,
@@ -244,14 +244,15 @@ app.post('/telegram-webhook', async (req, res) => {
 
                 reply += `*${productIndex}\\.* *${escapeMarkdown(body.title)}*\n`;
                 reply += `   *\\|ID\\|:* \`${escapeMarkdown(body.id)}\`\n`; 
-                reply += `   *\\|Precio\\|:* ${escapeMarkdown(body.currency_id)} ${escapeMarkdown(body.price)}\n`;
-                reply += `   *\\|Stock\\|:* ${escapeMarkdown(body.available_quantity)} \\| *\\|Ventas\\|:* ${escapeMarkdown(body.sold_quantity)}\n`;
+                reply += `   *\\|Precio\\|:* ${escapeMarkdown(body.currency_id)} ${escapeMarkdown(body.price)}\\n`;
+                reply += `   *\\|Stock\\|:* ${escapeMarkdown(body.available_quantity)} \\| *\\|Ventas\\|:* ${escapeMarkdown(body.sold_quantity)}\\n`;
 
-                // Agregamos el enlace a la imagen si existe
+                // CORRECCIÓN: Usamos la sintaxis correcta para los enlaces en MarkdownV2. 
+                // El texto del enlace [Imagen] y [Ver Producto] no necesitan escapar los corchetes, solo el URL.
                 if (body.thumbnail) {
-                    reply += `   *\\[Imagen](${body.thumbnail})\\]* \\| `;
+                    reply += `   *[Imagen](${escapeMarkdown(body.thumbnail)})* \\| `;
                 }
-                reply += `*\\[[Ver Producto](${body.permalink})\\]*\n\n`; 
+                reply += `*\\[[Ver Producto](${escapeMarkdown(body.permalink)})\\]*\n\n`; 
             });
             await sendTelegramMessage(chatId, reply);
         }
@@ -368,7 +369,7 @@ app.post('/telegram-webhook', async (req, res) => {
                             `*Ubicación actual:* ${escapeMarkdown(shipment.tracking_number ? shipment.tracking_number.location : 'N/A')}\n\n`;
 
                 if (shipment.tracking_url) {
-                    reply += `*\\[[Seguimiento completo](${shipment.tracking_url})\\]*`;
+                    reply += `*\\[[Seguimiento completo](${escapeMarkdown(shipment.tracking_url)})\\]*`;
                 }
 
                 await sendTelegramMessage(chatId, reply);
