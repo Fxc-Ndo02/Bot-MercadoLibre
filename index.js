@@ -105,7 +105,7 @@ app.get('/callback', async (req, res) => {
         
         // Notificar al chat principal si está configurado
         if (process.env.TELEGRAM_CHAT_ID) {
-            await sendTelegramMessage(process.env.TELEGRAM_CHAT_ID, '✅ ¡Bot vinculado correctamente a Mercado Libre!');
+            await sendTelegramMessage(process.env.TELEGRAM_CHAT_ID, '|✅| ¡CosmeticaSPA-BOT vinculado correctamente a Mercado Libre!');
         }
         
         res.send('<h3>¡Cuenta vinculada con éxito!</h3><p>Ya podés cerrar esta ventana y usar el bot en Telegram.</p>');
@@ -136,17 +136,17 @@ app.post('/telegram-webhook', async (req, res) => {
 
     // --- Comandos públicos ---
     if (text === '/start' || text === '/menu' || text === '/help') {
-        const menu = `*👋 ¡Hola\\! Estos son los comandos disponibles:*\n\n` +
-                     `*/productinfo* \\- Muestra tus productos activos\\.\n` +
-                     `*/checksales* \\- Revisa las últimas ventas\\.\n` +
-                     `*/checkquestions* \\- Muestra preguntas sin responder\\.\n` +
-                     `*/status* \\- Verifica el estado del bot\\.`;
+        const menu = `*|👋|\\ Estos son los comandos disponibles:*\n\n` +
+                     `*|/productinfo|* \\- Muestra informacion de tus productos\\.\n` +
+                     `*|/checksales|* \\- Revisa las últimas ventas concretadas\\.\n` +
+                     `*|/checkquestions|* \\- Muestra preguntas las preguntass pendientes\\.\n` +
+                     `*|/status|* \\- Verifica el estado de CosmeticaSPA-BOT\\.`;
         await sendTelegramMessage(chatId, menu);
         return res.sendStatus(200);
     }
     
     if (text === '/status') {
-        await sendTelegramMessage(chatId, '✅ El bot está activo y funcionando correctamente\\.');
+        await sendTelegramMessage(chatId, '|✅| CosmeticaSPA-BOT está activo y funcionando correctamente\\.');
         return res.sendStatus(200);
     }
 
@@ -169,7 +169,7 @@ app.post('/telegram-webhook', async (req, res) => {
 
             const itemIds = itemsResponse.data.results;
             if (itemIds.length === 0) {
-                await sendTelegramMessage(chatId, '📦 No tenés publicaciones activas en este momento\\.');
+                await sendTelegramMessage(chatId, '|📦| No tenés publicaciones activas en este momento\\.');
                 return res.sendStatus(200);
             }
 
@@ -178,13 +178,13 @@ app.post('/telegram-webhook', async (req, res) => {
                 params: { ids: itemIds.join(','), attributes: 'id,title,price,currency_id,available_quantity,sold_quantity,permalink' }
             });
 
-            let reply = `*📦 Información de tus ${detailsResponse.data.length} productos más recientes:*\n\n`;
+            let reply = `*|📦| Información de tus ${detailsResponse.data.length} productos más recientes:*\n\n`;
             detailsResponse.data.forEach(item => {
                 const body = item.body;
                 // **CORRECCIÓN CLAVE**: El link no se escapa, el resto sí.
                 reply += `*${escapeMarkdown(body.title)}*\n`;
-                reply += `   \\- *Precio:* ${escapeMarkdown(body.currency_id)} ${escapeMarkdown(body.price)}\n`;
-                reply += `   \\- *Stock:* ${escapeMarkdown(body.available_quantity)} \\| *Ventas:* ${escapeMarkdown(body.sold_quantity)}\n`;
+                reply += `   \\*|Precio|:* ${escapeMarkdown(body.currency_id)} ${escapeMarkdown(body.price)}\n`;
+                reply += `   \\*|Stock|:* ${escapeMarkdown(body.available_quantity)} \\| *Ventas:* ${escapeMarkdown(body.sold_quantity)}\n`;
                 reply += `   \\[[Ver Producto](${body.permalink})\\]\n\n`; // Link funcional
             });
             await sendTelegramMessage(chatId, reply);
@@ -199,13 +199,13 @@ app.post('/telegram-webhook', async (req, res) => {
             
             const orders = ordersResponse.data.results;
             if (orders.length === 0) {
-                await sendTelegramMessage(chatId, '✅ No se encontraron ventas recientes\\.');
+                await sendTelegramMessage(chatId, '|✅| No tenes ventas recientes\\.');
             } else {
-                let reply = '*🛒 Últimas 5 ventas:*\n\n';
+                let reply = '*|🛒| Últimas 5 ventas:*\n\n';
                 orders.forEach(order => {
-                    reply += `*ID:* \`${escapeMarkdown(order.id)}\`\n`;
-                    reply += `   \\- *Total:* ${escapeMarkdown(order.currency_id)} ${escapeMarkdown(order.total_amount)}\n`;
-                    reply += `   \\- *Fecha:* ${escapeMarkdown(new Date(order.date_created).toLocaleString('es-AR'))}\n\n`;
+                    reply += `*|ID|:* \`${escapeMarkdown(order.id)}\`\n`;
+                    reply += `   \\*|Total|:* ${escapeMarkdown(order.currency_id)} ${escapeMarkdown(order.total_amount)}\n`;
+                    reply += `   \\*|Fecha|:* ${escapeMarkdown(new Date(order.date_created).toLocaleString('es-AR'))}\n\n`;
                 });
                 await sendTelegramMessage(chatId, reply);
             }
@@ -220,9 +220,9 @@ app.post('/telegram-webhook', async (req, res) => {
             
             const questions = questionsResponse.data.questions;
             if (questions.length === 0) {
-                await sendTelegramMessage(chatId, '✅ ¡Excelente\\! No tenés preguntas pendientes de responder\\.');
+                await sendTelegramMessage(chatId, '|✅| No tenés preguntas pendientes para responder\\.');
             } else {
-                let reply = '*💬 Preguntas sin responder:*\n\n';
+                let reply = '*|💬| Preguntas sin responder:*\n\n';
                 questions.forEach(q => {
                     reply += `*En el producto:* \`${escapeMarkdown(q.item_id)}\`\n`;
                     reply += `   \\- _"${escapeMarkdown(q.text)}"_\n\n`;
@@ -232,7 +232,7 @@ app.post('/telegram-webhook', async (req, res) => {
         }
 
         else {
-             await sendTelegramMessage(chatId, '🤔 Comando no reconocido\\. Enviá /menu para ver la lista de comandos\\.');
+             await sendTelegramMessage(chatId, '|🤔| Comando no reconocido\\. Enviá /menu para ver la lista de comandos\\.');
         }
 
     } catch (error) {
