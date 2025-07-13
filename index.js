@@ -292,11 +292,11 @@ app.post('/telegram-webhook', async (req, res) => {
                     }
 
                     reply += `*${orderIndex}\\.* `;
-                    reply += `\\|ID Venta\\|: \`${escapeMarkdown(order.id)}\`\n`;
-                    reply += `*\\|Producto\\|:* ${escapeMarkdown(itemTitle)}\n`; // <-- AGREGADO: Nombre del producto
-                    reply += `\\|Total\\|: ${escapeMarkdown(formattedPrice)}\n`;
-                    reply += `\\|Comprador\\|: ${escapeMarkdown(order.buyer.nickname)}\n`;
-                    reply += `\\|Fecha\\|: ${escapeMarkdown(formattedDate)}\n`;
+                    reply += `*\\|Producto\\|:* ${escapeMarkdown(itemTitle)}\n`;
+                    reply += `*\\|ID Venta\\|:* \`${escapeMarkdown(order.id)}\`\n`; 
+                    reply += `*\\|Total\\|:* ${escapeMarkdown(formattedPrice)}\n`;
+                    reply += `*\\|Comprador\\|:* ${escapeMarkdown(order.buyer.nickname)}\n`;
+                    reply += `*\\|Fecha\\|:* ${escapeMarkdown(formattedDate)}\n`;
 
                     if (order.shipping && order.shipping.id) {
                         reply += `\\|Envío\\|: \`/checkshipment ${escapeMarkdown(order.shipping.id)}\`\n`;
