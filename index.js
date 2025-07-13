@@ -252,22 +252,24 @@ app.post('/telegram-webhook', async (req, res) => {
             await sendTelegramMessage(chatId, reply);
         }
 
-        // --- Comando /checksales (MODIFICADO) ---
+        // --- Comando /checksales (MODIFICADO para incluir nombre del producto) ---
         else if (text === '/checksales') {
             const ordersResponse = await axios.get('https://api.mercadolibre.com/orders/search', {
                 headers: authHeaders,
-                params: { seller: tokens.user_id, sort: 'date_desc', limit: 5 }
+                params: { seller: tokens.user_id, sort: 'date_desc', limit: 5 } // Limitar a 5 ventas para no saturar
             });
 
             const orders = ordersResponse.data.results;
-            const salesCount = orders.length; // Obtener la cantidad de ventas
+            const salesCount = orders.length;
 
             if (salesCount === 0) {
                 await sendTelegramMessage(chatId, '\\|✅\\| No tenés ventas recientes\\.');
             } else {
-                let reply = `*\\|🛒\\| Últimas ${salesCount} ventas encontradas:*\n\n`; // Mostrar la cantidad de ventas
+                let reply = `*\\|🛒\\| Últimas ${salesCount} ventas encontradas:*\n\n`;
 
-                orders.forEach((order, index) => { // Añadir index para enumerar
+                for (let i = 0; i < orders.length; i++) {
+                    const order = orders[i];
+                    const orderIndex = i + 1;
                     const formattedPrice = new Intl.NumberFormat('es-AR', { style: 'currency', currency: order.currency_id }).format(order.total_amount);
 
                     const orderDate = new Date(order.date_created);
@@ -281,18 +283,26 @@ app.post('/telegram-webhook', async (req, res) => {
                         hour12: false
                     }).format(orderDate).replace(/, /g, ' / ');
 
-                    reply += `*${index + 1}\\.* `; // Enumeración de la venta
-                    reply += `\\|ID\\|: \`${escapeMarkdown(order.id)}\`\n`;
+                    let itemTitle = 'Producto desconocido';
+                    if (order.order_items && order.order_items.length > 0) {
+                        // Iterar sobre los ítems de la orden (puede haber múltiples)
+                        // Para simplificar, tomamos el primero
+                        const item = order.order_items[0];
+                        itemTitle = item.item.title || 'Título no disponible';
+                    }
+
+                    reply += `*${orderIndex}\\.* `;
+                    reply += `\\|ID Venta\\|: \`${escapeMarkdown(order.id)}\`\n`;
+                    reply += `*\\|Producto\\|:* ${escapeMarkdown(itemTitle)}\n`; // <-- AGREGADO: Nombre del producto
                     reply += `\\|Total\\|: ${escapeMarkdown(formattedPrice)}\n`;
                     reply += `\\|Comprador\\|: ${escapeMarkdown(order.buyer.nickname)}\n`;
                     reply += `\\|Fecha\\|: ${escapeMarkdown(formattedDate)}\n`;
 
                     if (order.shipping && order.shipping.id) {
-                        // Haciendo el ID de envío clicable en Telegram
                         reply += `\\|Envío\\|: \`/checkshipment ${escapeMarkdown(order.shipping.id)}\`\n`;
                     }
                     reply += `\n`;
-                });
+                }
                 await sendTelegramMessage(chatId, reply);
             }
         }
