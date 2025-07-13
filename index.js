@@ -189,7 +189,7 @@ app.post('/telegram-webhook', async (req, res) => {
 
     // Comandos públicos
     if (text === '/start' || text === '/menu' || text === '/help') {
-        const menu = `*\\|👋\\|*\\ Estos son los comandos disponibles:\\\n\\\n` +
+        const menu = `*\\|🤓☝\\|*\\ Estos son los comandos disponibles:\\\n\\\n` +
                      `*\\|/productinfo\\|* \\- Muestra información de tus productos\\.\\\n` +
                      `*\\|/checksales\\|* \\- Revisa las últimas ventas concretadas\\.\\\n` +
                      `*\\|/checkquestions\\|* \\- Muestra preguntas las preguntas pendientes\\.\\\n` +
@@ -299,7 +299,7 @@ app.post('/telegram-webhook', async (req, res) => {
                     reply += `*\\|Fecha\\|:* ${escapeMarkdown(formattedDate)}\n`;
 
                     if (order.shipping && order.shipping.id) {
-                        reply += `\\|Envío\\|: \`/checkshipment ${escapeMarkdown(order.shipping.id)}\`\n`;
+                        reply += `*\\|Envío\\|:* \`/checkshipment ${escapeMarkdown(order.shipping.id)}\`\n`;
                     }
                     reply += `\n`;
                 }
