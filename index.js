@@ -189,7 +189,6 @@ app.post('/telegram-webhook', async (req, res) => {
 
     // Comandos públicos
     if (text === '/start' || text === '/menu' || text === '/help') {
-        // Se agregó /setstock y /checkshipment al menú
         const menu = `*\\|👋\\|*\\ Estos son los comandos disponibles:\\\n\\\n` +
                      `*\\|/productinfo\\|* \\- Muestra información de tus productos\\.\\\n` +
                      `*\\|/checksales\\|* \\- Revisa las últimas ventas concretadas\\.\\\n` +
@@ -197,7 +196,7 @@ app.post('/telegram-webhook', async (req, res) => {
                      `*\\|/responder \\(ID\\)\\|* \\- Responde una pregunta específica por su ID\\.\\\n` +
                      `*\\|/setstock \\(ID\\) \\(Cantidad\\)\\|* \\- Actualiza el stock de un producto\\.\\\n` +
                      `*\\|/checkshipment \\(ID\\)\\|* \\- Muestra el estado de un envío\\.\\\n` +
-                     `*\\|/status\\|* \\- Verifica el estado de CosmeticaSPA\\-BOT\\.`; // Eliminado el comando /uptimestatus del menú
+                     `*\\|/status\\|* \\- Verifica el estado de CosmeticaSPA\\-BOT\\.`;
         await sendTelegramMessage(chatId, menu);
         return res.sendStatus(200);
     }
@@ -206,8 +205,6 @@ app.post('/telegram-webhook', async (req, res) => {
         await sendTelegramMessage(chatId, '\\|✅\\| CosmeticaSPA\\-BOT está activo y funcionando correctamente\\.');
         return res.sendStatus(200);
     }
-
-    // ELIMINADO: La lógica para el comando /uptimestatus ha sido removida de aquí.
 
     // Comandos privados (requieren token)
     try {
@@ -243,24 +240,19 @@ app.post('/telegram-webhook', async (req, res) => {
                 const body = item.body;
                 const productIndex = index + 1;
 
-                // **Formato de Precio Automático**
                 const formattedPrice = new Intl.NumberFormat('es-AR', { style: 'currency', currency: body.currency_id }).format(body.price);
 
-                // Se agrega \\. para escapar el punto después del número de lista
                 reply += `${productIndex}\\. ${escapeMarkdown(body.title)}\n`;
                 reply += `\\|ID\\|: ${escapeMarkdown(body.id)}\n`;
-                reply += `\\|Precio\\|: ${escapeMarkdown(formattedPrice)}\n`; // Usamos el precio formateado
+                reply += `\\|Precio\\|: ${escapeMarkdown(formattedPrice)}\n`;
                 reply += `\\|Stock\\|: ${escapeMarkdown(body.available_quantity)}\n`;
                 reply += `\\|Ventas\\|: ${escapeMarkdown(body.sold_quantity)}\n`;
-
-                // **Enlace Clicable:** Usamos la sintaxis de Markdown V2 [Texto](URL) sin escapar los corchetes,
-                // asegurándonos de que sea un enlace válido y clicable.
                 reply += `[Ver Producto](${escapeMarkdown(body.permalink)})\n\n`;
             });
             await sendTelegramMessage(chatId, reply);
         }
 
-        // --- Comando /checksales (FORMATO CORREGIDO) ---
+        // --- Comando /checksales (MODIFICADO) ---
         else if (text === '/checksales') {
             const ordersResponse = await axios.get('https://api.mercadolibre.com/orders/search', {
                 headers: authHeaders,
@@ -268,16 +260,16 @@ app.post('/telegram-webhook', async (req, res) => {
             });
 
             const orders = ordersResponse.data.results;
-            if (orders.length === 0) {
+            const salesCount = orders.length; // Obtener la cantidad de ventas
+
+            if (salesCount === 0) {
                 await sendTelegramMessage(chatId, '\\|✅\\| No tenés ventas recientes\\.');
             } else {
-                let reply = `\\|🛒\\| Últimas 5 ventas:\n\n`;
+                let reply = `*\\|🛒\\| Últimas ${salesCount} ventas encontradas:*\n\n`; // Mostrar la cantidad de ventas
 
-                orders.forEach(order => {
-                    // Formato de precio con formato de moneda
+                orders.forEach((order, index) => { // Añadir index para enumerar
                     const formattedPrice = new Intl.NumberFormat('es-AR', { style: 'currency', currency: order.currency_id }).format(order.total_amount);
 
-                    // Formato de fecha y hora: 05/07/2025 / 05:23:11
                     const orderDate = new Date(order.date_created);
                     const formattedDate = new Intl.DateTimeFormat('es-AR', {
                         day: '2-digit',
@@ -289,14 +281,15 @@ app.post('/telegram-webhook', async (req, res) => {
                         hour12: false
                     }).format(orderDate).replace(/, /g, ' / ');
 
-                    // Se usan \n para los saltos de línea reales
-                    reply += `\\|ID\\|: ${escapeMarkdown(order.id)}\n`;
+                    reply += `*${index + 1}\\.* `; // Enumeración de la venta
+                    reply += `\\|ID\\|: \`${escapeMarkdown(order.id)}\`\n`;
                     reply += `\\|Total\\|: ${escapeMarkdown(formattedPrice)}\n`;
                     reply += `\\|Comprador\\|: ${escapeMarkdown(order.buyer.nickname)}\n`;
                     reply += `\\|Fecha\\|: ${escapeMarkdown(formattedDate)}\n`;
 
                     if (order.shipping && order.shipping.id) {
-                        reply += `\\|Envío\\|: ${escapeMarkdown(`/checkshipment ${order.shipping.id}`)}\n`;
+                        // Haciendo el ID de envío clicable en Telegram
+                        reply += `\\|Envío\\|: \`/checkshipment ${escapeMarkdown(order.shipping.id)}\`\n`;
                     }
                     reply += `\n`;
                 });
